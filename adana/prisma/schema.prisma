@@ -1,0 +1,463 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ============ AUTH & USERS ============
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  avatar    String?
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  assignedTasks    Task[]            @relation("TaskAssignee")
+  createdTasks     Task[]            @relation("TaskCreator")
+  comments         Comment[]
+  taskLikes        TaskLike[]
+  commentLikes     CommentLike[]
+  taskFollowers    TaskFollower[]
+  teamMemberships  TeamMember[]
+  projectMembers   ProjectMember[]
+  notifications    Notification[]
+  createdProjects  Project[]         @relation("ProjectCreator")
+  statusUpdates    ProjectStatus[]
+  goals            Goal[]
+  portfolios       Portfolio[]
+  rules            AutomationRule[]
+  ruleExecutions   RuleExecution[]
+  formSubmissions  FormSubmission[]
+  savedSearches    SavedSearch[]
+}
+
+// ============ TEAMS & WORKSPACE ============
+
+model Team {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  members     TeamMember[]
+  projects    Project[]
+}
+
+model TeamMember {
+  id     String @id @default(cuid())
+  role   String @default("member") // admin, member
+  teamId String
+  userId String
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+}
+
+// ============ PROJECTS ============
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  color       String   @default("#4c6ef5")
+  icon        String   @default("folder")
+  archived    Boolean  @default(false)
+  favorite    Boolean  @default(false)
+  defaultView String   @default("list") // list, board, timeline, calendar
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creatorId String
+  creator   User   @relation("ProjectCreator", fields: [creatorId], references: [id])
+  teamId    String?
+  team      Team?  @relation(fields: [teamId], references: [id])
+
+  // Relations
+  sections       Section[]
+  tasks          Task[]
+  members        ProjectMember[]
+  statuses       ProjectStatus[]
+  customFields   CustomFieldDef[]
+  forms          Form[]
+  rules          AutomationRule[]
+  taskProjects   TaskProject[]
+  portfolioItems PortfolioProject[]
+  goalLinks      GoalProject[]
+  templates      ProjectTemplate[]
+  messages       ProjectMessage[]
+}
+
+model ProjectMember {
+  id        String @id @default(cuid())
+  role      String @default("editor") // owner, editor, commenter, viewer
+  projectId String
+  userId    String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+}
+
+model ProjectStatus {
+  id        String   @id @default(cuid())
+  status    String   // on_track, at_risk, off_track, on_hold, complete
+  text      String?
+  createdAt DateTime @default(now())
+  projectId String
+  authorId  String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id])
+}
+
+model ProjectTemplate {
+  id          String @id @default(cuid())
+  name        String
+  description String?
+  projectId   String
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  templateData String // JSON string of project structure
+  createdAt   DateTime @default(now())
+}
+
+model ProjectMessage {
+  id        String   @id @default(cuid())
+  text      String
+  authorId  String
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+// ============ SECTIONS ============
+
+model Section {
+  id        String   @id @default(cuid())
+  name      String
+  position  Int      @default(0)
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============ TASKS ============
+
+model Task {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  dueDate     DateTime?
+  dueTime     String?
+  startDate   DateTime?
+  priority    String?   // high, medium, low
+  taskType    String    @default("task") // task, milestone, approval
+  approvalStatus String? // pending, approved, changes_requested, rejected
+  position    Int       @default(0)
+  isTemplate  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  assigneeId  String?
+  assignee    User?    @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  creatorId   String
+  creator     User     @relation("TaskCreator", fields: [creatorId], references: [id])
+  projectId   String?
+  project     Project? @relation(fields: [projectId], references: [id])
+  sectionId   String?
+  section     Section? @relation(fields: [sectionId], references: [id])
+  parentId    String?
+  parent      Task?    @relation("Subtasks", fields: [parentId], references: [id])
+  subtasks    Task[]   @relation("Subtasks")
+
+  // Many-to-many
+  tags           TaskTag[]
+  comments       Comment[]
+  likes          TaskLike[]
+  followers      TaskFollower[]
+  attachments    Attachment[]
+  customValues   CustomFieldValue[]
+  taskProjects   TaskProject[]
+
+  // Dependencies
+  blockedBy      Dependency[] @relation("BlockedTask")
+  blocking       Dependency[] @relation("BlockingTask")
+}
+
+model TaskProject {
+  id        String  @id @default(cuid())
+  taskId    String
+  projectId String
+  task      Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, projectId])
+}
+
+model TaskTag {
+  id     String @id @default(cuid())
+  taskId String
+  tagId  String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, tagId])
+}
+
+model Tag {
+  id    String    @id @default(cuid())
+  name  String    @unique
+  color String    @default("#6c757d")
+  tasks TaskTag[]
+}
+
+// ============ DEPENDENCIES ============
+
+model Dependency {
+  id             String @id @default(cuid())
+  blockedTaskId  String
+  blockingTaskId String
+  blockedTask    Task   @relation("BlockedTask", fields: [blockedTaskId], references: [id], onDelete: Cascade)
+  blockingTask   Task   @relation("BlockingTask", fields: [blockingTaskId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+
+  @@unique([blockedTaskId, blockingTaskId])
+}
+
+// ============ CUSTOM FIELDS ============
+
+model CustomFieldDef {
+  id        String   @id @default(cuid())
+  name      String
+  fieldType String   // text, number, dropdown, date, checkbox
+  options   String?  // JSON array for dropdown options
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  values    CustomFieldValue[]
+  createdAt DateTime @default(now())
+}
+
+model CustomFieldValue {
+  id      String       @id @default(cuid())
+  value   String?
+  taskId  String
+  fieldId String
+  task    Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  field   CustomFieldDef @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, fieldId])
+}
+
+// ============ COMMENTS & INTERACTIONS ============
+
+model Comment {
+  id        String        @id @default(cuid())
+  text      String
+  taskId    String
+  authorId  String
+  task      Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author    User          @relation(fields: [authorId], references: [id])
+  likes     CommentLike[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+model TaskLike {
+  id     String @id @default(cuid())
+  taskId String
+  userId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+}
+
+model CommentLike {
+  id        String  @id @default(cuid())
+  commentId String
+  userId    String
+  comment   Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId])
+}
+
+model TaskFollower {
+  id     String @id @default(cuid())
+  taskId String
+  userId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+}
+
+model Attachment {
+  id       String   @id @default(cuid())
+  name     String
+  url      String
+  size     Int
+  mimeType String
+  taskId   String
+  task     Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+// ============ NOTIFICATIONS ============
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String   // assigned, commented, mentioned, completed, dependency_resolved
+  title     String
+  message   String?
+  read      Boolean  @default(false)
+  archived  Boolean  @default(false)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  linkUrl   String?
+  createdAt DateTime @default(now())
+}
+
+// ============ AUTOMATION RULES ============
+
+model AutomationRule {
+  id          String   @id @default(cuid())
+  name        String
+  active      Boolean  @default(true)
+  triggerType String   // task_created, task_completed, task_moved, due_date_approaching, assignee_changed, field_changed
+  triggerConfig String // JSON config for trigger
+  actionType  String   // assign, move_section, set_field, add_comment, mark_complete, set_priority
+  actionConfig String  // JSON config for action
+  projectId   String
+  creatorId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator     User     @relation(fields: [creatorId], references: [id])
+  executions  RuleExecution[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model RuleExecution {
+  id        String   @id @default(cuid())
+  ruleId    String
+  userId    String
+  success   Boolean
+  details   String?
+  rule      AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id])
+  createdAt DateTime       @default(now())
+}
+
+// ============ PORTFOLIOS ============
+
+model Portfolio {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  color       String   @default("#4c6ef5")
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id])
+  projects    PortfolioProject[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model PortfolioProject {
+  id          String    @id @default(cuid())
+  portfolioId String
+  projectId   String
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([portfolioId, projectId])
+}
+
+// ============ GOALS ============
+
+model Goal {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  status      String   @default("on_track") // on_track, at_risk, off_track, achieved, missed
+  progress    Int      @default(0) // 0-100
+  period      String?  // Q1_2026, Q2_2026, annual_2026, custom
+  startDate   DateTime?
+  endDate     DateTime?
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id])
+  parentId    String?
+  parent      Goal?    @relation("SubGoals", fields: [parentId], references: [id])
+  subGoals    Goal[]   @relation("SubGoals")
+  projects    GoalProject[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model GoalProject {
+  id        String  @id @default(cuid())
+  goalId    String
+  projectId String
+  goal      Goal    @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([goalId, projectId])
+}
+
+// ============ FORMS ============
+
+model Form {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fields      FormField[]
+  submissions FormSubmission[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model FormField {
+  id        String @id @default(cuid())
+  label     String
+  fieldType String // text, textarea, dropdown, date, number, checkbox
+  required  Boolean @default(false)
+  options   String? // JSON for dropdown
+  position  Int     @default(0)
+  formId    String
+  form      Form   @relation(fields: [formId], references: [id], onDelete: Cascade)
+}
+
+model FormSubmission {
+  id        String   @id @default(cuid())
+  data      String   // JSON of field values
+  formId    String
+  userId    String?
+  form      Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+// ============ SAVED SEARCHES ============
+
+model SavedSearch {
+  id        String   @id @default(cuid())
+  name      String
+  query     String
+  filters   String   // JSON filters
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}

@@ -1,0 +1,157 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --sidebar-bg: 232 20% 18%;
+    --sidebar-fg: 0 0% 90%;
+    --sidebar-hover: 232 20% 24%;
+    --sidebar-active: 232 20% 28%;
+    --sidebar-border: 232 15% 25%;
+    --sidebar-muted: 232 10% 55%;
+    --sidebar-accent: 262 80% 65%;
+
+    --status-on-track: 142 76% 36%;
+    --status-at-risk: 38 92% 50%;
+    --status-off-track: 0 84% 60%;
+    --status-on-hold: 240 4% 46%;
+    --status-complete: 142 76% 36%;
+
+    --priority-high: 0 84% 60%;
+    --priority-medium: 38 92% 50%;
+    --priority-low: 217 91% 60%;
+    --priority-none: 240 4% 46%;
+  }
+
+  body {
+    @apply bg-white text-gray-900 antialiased;
+  }
+}
+
+@layer components {
+  .sidebar {
+    background-color: hsl(var(--sidebar-bg));
+    color: hsl(var(--sidebar-fg));
+  }
+
+  .sidebar-item {
+    @apply flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors;
+    color: hsl(var(--sidebar-fg));
+  }
+
+  .sidebar-item:hover {
+    background-color: hsl(var(--sidebar-hover));
+  }
+
+  .sidebar-item.active {
+    background-color: hsl(var(--sidebar-active));
+    color: hsl(var(--sidebar-accent));
+  }
+
+  .task-row {
+    @apply flex items-center gap-2 border-b border-gray-100 px-4 py-2 text-sm transition-colors hover:bg-gray-50;
+  }
+
+  .task-row.completed {
+    @apply text-gray-400 line-through;
+  }
+
+  .board-card {
+    @apply rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md;
+  }
+
+  .board-card.dragging {
+    @apply rotate-2 shadow-lg;
+  }
+
+  .section-header {
+    @apply flex items-center gap-2 border-b border-gray-200 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+
+  .status-badge.on-track {
+    background-color: hsl(var(--status-on-track) / 0.15);
+    color: hsl(var(--status-on-track));
+  }
+
+  .status-badge.at-risk {
+    background-color: hsl(var(--status-at-risk) / 0.15);
+    color: hsl(var(--status-at-risk));
+  }
+
+  .status-badge.off-track {
+    background-color: hsl(var(--status-off-track) / 0.15);
+    color: hsl(var(--status-off-track));
+  }
+
+  .priority-dot {
+    @apply h-2 w-2 rounded-full;
+  }
+
+  .priority-dot.high {
+    background-color: hsl(var(--priority-high));
+  }
+
+  .priority-dot.medium {
+    background-color: hsl(var(--priority-medium));
+  }
+
+  .priority-dot.low {
+    background-color: hsl(var(--priority-low));
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #d1d5db transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: #d1d5db;
+    border-radius: 3px;
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.2s ease-out;
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-slide-in-right {
+    animation: slide-in-right 0.2s ease-out;
+  }
+
+  @keyframes slide-in-right {
+    from {
+      opacity: 0;
+      transform: translateX(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+}
