@@ -257,6 +257,44 @@ adana/
 
 ---
 
+## FEATURES ASANA NON ENCORE IMPLEMENTEES (à faire dans le futur)
+Source: recherche exhaustive sur asana.com (avril 2026)
+
+- [ ] Tâches récurrentes (daily, weekly, monthly, custom interval)
+- [ ] Proofing (annotations image/PDF avec feedback)
+- [ ] Multi-select custom fields (multi-enum)
+- [ ] Formula custom fields (champs calculés)
+- [ ] Conditional branching dans les formulaires
+- [ ] Critical path sur Timeline
+- [ ] Auto-rescheduling des dépendances
+- [ ] Cross-project dependencies
+- [ ] Nested portfolios
+- [ ] Portfolio timeline
+- [ ] Workload avec capacité en heures/points
+- [ ] Time tracking (timer intégré + saisie manuelle)
+- [ ] Project Messages (discussion threads dans projet)
+- [ ] Team Messages et Direct Messages
+- [ ] @-mentions dans les commentaires
+- [ ] Likes sur les commentaires
+- [ ] Multi-action rules (1 trigger → N actions)
+- [ ] Conditional logic dans les rules
+- [ ] Cross-project rules
+- [ ] Script actions (JavaScript custom dans les rules)
+- [ ] AI features (résumé, smart status, task creation NLP)
+- [ ] Image proofing (annotations visuelles)
+- [ ] Saved views / tabs personnalisés par projet
+- [ ] Task recurring schedules
+- [ ] Merge duplicate tasks
+- [ ] Desktop/mobile offline mode
+- [ ] Keyboard shortcuts complets (Tab+Q, Tab+A, etc.)
+- [ ] Guest access (collaborateurs externes limités)
+- [ ] SAML SSO, SCIM provisioning
+- [ ] Admin console (gestion users, sécurité, audit log)
+- [ ] API REST publique + Webhooks
+- [ ] 200+ integrations (Slack, Teams, Jira, Google, etc.)
+
+---
+
 ## NOTES
 - App appelée "Adana" (inspirée d'Asana)
 - Stack: Next.js 14 + TypeScript + Tailwind + Prisma + SQLite
@@ -264,3 +302,5 @@ adana/
 - Build réussi (next build passe)
 - Le CLAUDE.md est mis à jour au fur et à mesure de l'avancement
 - Pour lancer: `cd adana && npm install && npx prisma db push && npx tsx prisma/seed.ts && npm run dev`
+- Recherche Asana complète effectuée (22 catégories, 500+ features identifiées)
+- Features majeures implémentées, features avancées/enterprise listées ci-dessus pour le futur
