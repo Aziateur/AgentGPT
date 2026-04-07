@@ -9,10 +9,32 @@ import { cn } from "@/lib/utils";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
+  user?: Record<string, unknown> | null;
+  projects?: Array<Record<string, unknown>>;
+  teams?: Array<Record<string, unknown>>;
+  notificationCount?: number;
 }
 
-export function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { sidebarCollapsed, theme } = useAppStore();
+export function DashboardLayout({
+  children,
+  user,
+  projects = [],
+  teams = [],
+  notificationCount = 0,
+}: DashboardLayoutProps) {
+  const { sidebarCollapsed, theme, setCurrentUser } = useAppStore();
+
+  // Set the current user in the Zustand store when the server provides one
+  useEffect(() => {
+    if (user) {
+      setCurrentUser({
+        id: user.id as string,
+        name: user.name as string,
+        email: user.email as string,
+        avatar: (user.avatar as string | null) ?? null,
+      });
+    }
+  }, [user, setCurrentUser]);
 
   // Sync the dark class on <html> so Tailwind dark: variants work globally
   useEffect(() => {
@@ -28,7 +50,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     <div className={cn("h-screen", theme === "dark" && "dark")}>
       <div className="flex h-full bg-white dark:bg-surface-dark">
         {/* Sidebar */}
-        <Sidebar />
+        <Sidebar
+          projects={projects}
+          teams={teams}
+          notificationCount={notificationCount}
+        />
 
         {/* Main area: header + scrollable content */}
         <motion.div

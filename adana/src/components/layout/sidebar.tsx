@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   House,
@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { useAppStore } from "@/stores/app-store";
 import { cn } from "@/lib/utils";
-import type { Project, Team } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Animation variants
@@ -35,26 +34,14 @@ const fadeVariants = {
 };
 
 // ---------------------------------------------------------------------------
-// Placeholder data (replace with real data fetching later)
+// Props for real data from server
 // ---------------------------------------------------------------------------
 
-const PLACEHOLDER_PROJECTS: (Pick<Project, "id" | "name" | "color"> & {
-  isFavorite: boolean;
-})[] = [
-  { id: "proj-1", name: "Product Launch", color: "#4c6ef5", isFavorite: true },
-  { id: "proj-2", name: "Marketing Site", color: "#f76707", isFavorite: true },
-  { id: "proj-3", name: "Mobile App", color: "#37b24d", isFavorite: false },
-  { id: "proj-4", name: "Design System", color: "#ae3ec9", isFavorite: false },
-  { id: "proj-5", name: "Q2 Planning", color: "#f59f00", isFavorite: false },
-];
-
-const PLACEHOLDER_TEAMS: Pick<Team, "id" | "name">[] = [
-  { id: "team-1", name: "Engineering" },
-  { id: "team-2", name: "Design" },
-  { id: "team-3", name: "Marketing" },
-];
-
-const NOTIFICATION_COUNT = 3;
+interface SidebarProps {
+  projects?: Array<Record<string, unknown>>;
+  teams?: Array<Record<string, unknown>>;
+  notificationCount?: number;
+}
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -155,12 +142,26 @@ function Separator() {
 // Sidebar component
 // ---------------------------------------------------------------------------
 
-export function Sidebar() {
+export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { currentUser, sidebarCollapsed, toggleSidebar } = useAppStore();
 
-  const favoriteProjects = PLACEHOLDER_PROJECTS.filter((p) => p.isFavorite);
-  const recentProjects = PLACEHOLDER_PROJECTS.filter((p) => !p.isFavorite).slice(0, 3);
+  // Map server data to display shape
+  const allProjects = projects.map((p) => ({
+    id: p.id as string,
+    name: p.name as string,
+    color: (p.color as string) || "#6366f1",
+    isFavorite: Boolean(p.favorite),
+  }));
+
+  const favoriteProjects = allProjects.filter((p) => p.isFavorite);
+  const recentProjects = allProjects.filter((p) => !p.isFavorite).slice(0, 5);
+
+  const allTeams = teams.map((t) => ({
+    id: t.id as string,
+    name: t.name as string,
+  }));
 
   return (
     <motion.aside
@@ -208,9 +209,9 @@ export function Sidebar() {
             sidebarCollapsed && "justify-center px-0"
           )}
         >
-          {currentUser.avatarUrl ? (
+          {currentUser.avatar ? (
             <img
-              src={currentUser.avatarUrl}
+              src={currentUser.avatar}
               alt={currentUser.name}
               className="h-6 w-6 flex-shrink-0 rounded-full object-cover"
             />
@@ -243,11 +244,11 @@ export function Sidebar() {
       {/* Main navigation -------------------------------------------------- */}
       <nav className="flex-1 overflow-y-auto overflow-x-hidden px-1.5 py-1">
         <NavItem
-          href="/"
+          href="/home"
           icon={<House className="h-4 w-4" />}
           label="Home"
           collapsed={sidebarCollapsed}
-          active={pathname === "/"}
+          active={pathname === "/" || pathname === "/home"}
         />
         <NavItem
           href="/my-tasks"
@@ -260,7 +261,7 @@ export function Sidebar() {
           href="/inbox"
           icon={<Bell className="h-4 w-4" />}
           label="Inbox"
-          badge={NOTIFICATION_COUNT}
+          badge={notificationCount}
           collapsed={sidebarCollapsed}
           active={pathname === "/inbox"}
         />
@@ -275,11 +276,11 @@ export function Sidebar() {
         {favoriteProjects.map((project) => (
           <Link
             key={project.id}
-            href={`/projects/${project.id}`}
+            href={`/projects/${project.id}/list`}
             className={cn(
               "group flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors",
               "text-sidebar-text hover:bg-sidebar-hover hover:text-sidebar-text-active",
-              pathname === `/projects/${project.id}` &&
+              pathname.startsWith(`/projects/${project.id}`) &&
                 "bg-sidebar-active text-sidebar-text-active",
               sidebarCollapsed && "justify-center px-0"
             )}
@@ -311,7 +312,7 @@ export function Sidebar() {
             <SectionHeader
               label="Projects"
               collapsed={sidebarCollapsed}
-              onAdd={() => {}}
+              onAdd={() => router.push("/projects")}
             />
             {recentProjects.map((project) => (
               <Link
@@ -377,7 +378,7 @@ export function Sidebar() {
 
         {/* Teams ---------------------------------------------------------- */}
         <SectionHeader label="Teams" collapsed={sidebarCollapsed} />
-        {PLACEHOLDER_TEAMS.map((team) => (
+        {allTeams.map((team) => (
           <Link
             key={team.id}
             href={`/teams/${team.id}`}

@@ -2,7 +2,7 @@
 
 export type ProjectView = "list" | "board" | "timeline" | "calendar" | "overview";
 
-export type TaskPriority = "low" | "medium" | "high" | null;
+export type TaskPriority = "none" | "low" | "medium" | "high";
 
 export type TaskType = "task" | "milestone" | "approval";
 
@@ -18,7 +18,7 @@ export type Theme = "light" | "dark";
 
 export type MemberRole = "owner" | "admin" | "editor" | "commenter" | "viewer" | "member";
 
-export type NotificationType = "assigned" | "commented" | "mentioned" | "completed" | "dependency_resolved";
+export type NotificationType = "assigned" | "commented" | "mentioned" | "completed" | "dependency_resolved" | "task_assigned" | "task_completed" | "comment_added" | "due_date_approaching" | "project_status_update" | "mention" | "approval_request" | "approval_response";
 
 // Entity types - loosely typed to match Prisma output
 

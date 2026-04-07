@@ -84,10 +84,12 @@ export function TaskRow({
   const [justCompleted, setJustCompleted] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
+  const taskName = task.title || (task as Record<string, unknown>).name as string || "";
+
   // Sync external name changes
   React.useEffect(() => {
-    if (!isEditing) setEditValue(task.name);
-  }, [task.name, isEditing]);
+    if (!isEditing) setEditValue(taskName);
+  }, [taskName, isEditing]);
 
   // Focus input when entering edit mode
   React.useEffect(() => {
@@ -109,10 +111,10 @@ export function TaskRow({
   const commitTitle = () => {
     setIsEditing(false);
     const trimmed = editValue.trim();
-    if (trimmed && trimmed !== task.name) {
-      onUpdate?.(task.id, { name: trimmed });
+    if (trimmed && trimmed !== taskName) {
+      onUpdate?.(task.id, { title: trimmed });
     } else {
-      setEditValue(task.name);
+      setEditValue(taskName);
     }
   };
 
@@ -126,7 +128,7 @@ export function TaskRow({
 
   // Build custom field value display
   const customFieldCells = customFieldDefs.map((def) => {
-    const cfv = task.customFieldValues.find((v) => v.fieldId === def.id);
+    const cfv = (task.customValues || (task as Record<string, unknown>).customFieldValues as Array<Record<string, unknown>> || []).find((v: Record<string, unknown>) => v.fieldId === def.id);
     let display = "---";
     if (cfv) {
       if (cfv.stringValue) display = cfv.stringValue;
@@ -145,8 +147,9 @@ export function TaskRow({
     );
   });
 
-  const isMilestone = task.type === "milestone";
-  const isApproval = task.type === "approval";
+  const taskType = task.taskType || (task as Record<string, unknown>).type as string || "task";
+  const isMilestone = taskType === "milestone";
+  const isApproval = taskType === "approval";
 
   return (
     <motion.div
@@ -257,7 +260,7 @@ export function TaskRow({
               task.completed && "line-through text-gray-400",
             )}
           >
-            {task.name}
+            {taskName}
           </span>
         )}
       </div>
@@ -296,9 +299,9 @@ export function TaskRow({
 
       {/* Priority */}
       <div className="flex-shrink-0 w-20">
-        {task.priority !== "none" && (
-          <Badge variant={priorityVariant[task.priority]} className="text-[10px]">
-            {priorityLabel[task.priority]}
+        {task.priority && task.priority !== "none" && (
+          <Badge variant={priorityVariant[task.priority as TaskPriority] || "default"} className="text-[10px]">
+            {priorityLabel[task.priority as TaskPriority] || task.priority}
           </Badge>
         )}
       </div>

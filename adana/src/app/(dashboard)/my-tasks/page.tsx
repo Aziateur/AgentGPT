@@ -1,173 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import type { Task } from "@/types";
-
-// -- Mock data ----------------------------------------------------------------
-
-const mockTasks: Task[] = [
-  {
-    id: "t1",
-    name: "Design homepage wireframes",
-    description: null,
-    htmlDescription: null,
-    status: "in_progress",
-    priority: "high",
-    type: "task",
-    completed: false,
-    completedAt: null,
-    assigneeId: "demo-user",
-    projectId: "p1",
-    sectionId: null,
-    parentTaskId: null,
-    order: 0,
-    dueDate: new Date(Date.now() - 86400000).toISOString(),
-    startDate: null,
-    estimatedMinutes: 120,
-    actualMinutes: null,
-    tagIds: [],
-    followerIds: [],
-    subtaskIds: [],
-    dependencyIds: [],
-    approvalStatus: null,
-    approverIds: [],
-    likes: 0,
-    attachmentCount: 0,
-    commentCount: 2,
-    customFieldValues: [],
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "t2",
-    name: "Set up CI/CD pipeline",
-    description: null,
-    htmlDescription: null,
-    status: "not_started",
-    priority: "medium",
-    type: "task",
-    completed: false,
-    completedAt: null,
-    assigneeId: "demo-user",
-    projectId: "p2",
-    sectionId: null,
-    parentTaskId: null,
-    order: 1,
-    dueDate: new Date(Date.now() + 86400000).toISOString(),
-    startDate: null,
-    estimatedMinutes: 60,
-    actualMinutes: null,
-    tagIds: [],
-    followerIds: [],
-    subtaskIds: [],
-    dependencyIds: [],
-    approvalStatus: null,
-    approverIds: [],
-    likes: 1,
-    attachmentCount: 0,
-    commentCount: 0,
-    customFieldValues: [],
-    createdAt: new Date(Date.now() - 7200000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "t3",
-    name: "Write API documentation",
-    description: null,
-    htmlDescription: null,
-    status: "not_started",
-    priority: "low",
-    type: "task",
-    completed: false,
-    completedAt: null,
-    assigneeId: "demo-user",
-    projectId: "p1",
-    sectionId: null,
-    parentTaskId: null,
-    order: 2,
-    dueDate: new Date(Date.now() + 604800000).toISOString(),
-    startDate: null,
-    estimatedMinutes: 90,
-    actualMinutes: null,
-    tagIds: [],
-    followerIds: [],
-    subtaskIds: [],
-    dependencyIds: [],
-    approvalStatus: null,
-    approverIds: [],
-    likes: 0,
-    attachmentCount: 1,
-    commentCount: 3,
-    customFieldValues: [],
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "t4",
-    name: "Review pull requests",
-    description: null,
-    htmlDescription: null,
-    status: "not_started",
-    priority: "medium",
-    type: "task",
-    completed: false,
-    completedAt: null,
-    assigneeId: "demo-user",
-    projectId: "p2",
-    sectionId: null,
-    parentTaskId: null,
-    order: 3,
-    dueDate: new Date(Date.now() + 259200000).toISOString(),
-    startDate: null,
-    estimatedMinutes: 30,
-    actualMinutes: null,
-    tagIds: [],
-    followerIds: [],
-    subtaskIds: [],
-    dependencyIds: [],
-    approvalStatus: null,
-    approverIds: [],
-    likes: 0,
-    attachmentCount: 0,
-    commentCount: 1,
-    customFieldValues: [],
-    createdAt: new Date(Date.now() - 172800000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "t5",
-    name: "Update onboarding flow",
-    description: null,
-    htmlDescription: null,
-    status: "completed",
-    priority: "high",
-    type: "task",
-    completed: true,
-    completedAt: new Date(Date.now() - 3600000).toISOString(),
-    assigneeId: "demo-user",
-    projectId: "p1",
-    sectionId: null,
-    parentTaskId: null,
-    order: 4,
-    dueDate: new Date(Date.now() - 172800000).toISOString(),
-    startDate: null,
-    estimatedMinutes: 45,
-    actualMinutes: 50,
-    tagIds: [],
-    followerIds: [],
-    subtaskIds: [],
-    dependencyIds: [],
-    approvalStatus: null,
-    approverIds: [],
-    likes: 2,
-    attachmentCount: 0,
-    commentCount: 0,
-    customFieldValues: [],
-    createdAt: new Date(Date.now() - 604800000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
 
 // -- Helpers ------------------------------------------------------------------
 
@@ -189,67 +24,47 @@ function isOverdue(dueDate: string) {
   return new Date(dueDate) < new Date();
 }
 
-type TabKey = "recently_assigned" | "today" | "upcoming" | "later";
-
-function categorizeTasks(tasks: Task[]) {
-  const now = new Date();
-  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-  const weekEnd = new Date(todayEnd.getTime() + 7 * 86400000);
-
-  const recentlyAssigned = tasks
-    .filter((t) => !t.completed)
-    .sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    )
-    .slice(0, 10);
-
-  const today = tasks.filter(
-    (t) =>
-      !t.completed &&
-      t.dueDate &&
-      (new Date(t.dueDate) <= todayEnd || isOverdue(t.dueDate))
-  );
-
-  const upcoming = tasks.filter(
-    (t) =>
-      !t.completed &&
-      t.dueDate &&
-      new Date(t.dueDate) > todayEnd &&
-      new Date(t.dueDate) <= weekEnd
-  );
-
-  const later = tasks.filter(
-    (t) =>
-      !t.completed &&
-      (!t.dueDate || new Date(t.dueDate) > weekEnd)
-  );
-
-  return { recently_assigned: recentlyAssigned, today, upcoming, later };
-}
+type TabKey = "today" | "upcoming" | "later";
 
 // -- Component ----------------------------------------------------------------
 
 export default function MyTasksPage() {
-  const [tasks, setTasks] = useState<Task[]>(mockTasks);
-  const [activeTab, setActiveTab] = useState<TabKey>("recently_assigned");
-  const [sortBy, setSortBy] = useState<"due_date" | "priority" | "name">("due_date");
+  const router = useRouter();
+  const [todayTasks, setTodayTasks] = useState<Task[]>([]);
+  const [upcomingTasks, setUpcomingTasks] = useState<Task[]>([]);
+  const [laterTasks, setLaterTasks] = useState<Task[]>([]);
+  const [activeTab, setActiveTab] = useState<TabKey>("today");
+  const [sortBy, setSortBy] = useState<"due_date" | "priority" | "title">("due_date");
   const [showAddTask, setShowAddTask] = useState(false);
   const [newTaskName, setNewTaskName] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const { getMyTasks } = await import("@/app/actions/task-actions");
-        const fetched = await getMyTasks();
-        if (fetched?.length) setTasks(fetched);
-      } catch {
-        // keep mock data
+  const loadTasks = useCallback(async () => {
+    try {
+      const { getMyTasks } = await import("@/app/actions/task-actions");
+      const result = await getMyTasks();
+      if (result) {
+        setTodayTasks(result.today as Task[] || []);
+        setUpcomingTasks(result.upcoming as Task[] || []);
+        setLaterTasks(result.later as Task[] || []);
       }
+    } catch {
+      // keep empty
+    } finally {
+      setLoading(false);
     }
-    load();
   }, []);
 
-  const categorized = categorizeTasks(tasks);
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
+
+  const categorized: Record<TabKey, Task[]> = {
+    today: todayTasks,
+    upcoming: upcomingTasks,
+    later: laterTasks,
+  };
+
   const displayTasks = categorized[activeTab];
 
   const sorted = [...displayTasks].sort((a, b) => {
@@ -259,70 +74,53 @@ export default function MyTasksPage() {
       return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
     }
     if (sortBy === "priority") {
-      const order = { high: 0, medium: 1, low: 2, none: 3 };
-      return order[a.priority] - order[b.priority];
+      const order: Record<string, number> = { high: 0, medium: 1, low: 2, none: 3 };
+      return (order[a.priority || "none"] ?? 3) - (order[b.priority || "none"] ?? 3);
     }
-    return a.name.localeCompare(b.name);
+    return (a.title || "").localeCompare(b.title || "");
   });
 
   const tabs: { key: TabKey; label: string; count: number }[] = [
-    { key: "recently_assigned", label: "Recently Assigned", count: categorized.recently_assigned.length },
-    { key: "today", label: "Today", count: categorized.today.length },
-    { key: "upcoming", label: "Upcoming", count: categorized.upcoming.length },
-    { key: "later", label: "Later", count: categorized.later.length },
+    { key: "today", label: "Today", count: todayTasks.length },
+    { key: "upcoming", label: "Upcoming", count: upcomingTasks.length },
+    { key: "later", label: "Later", count: laterTasks.length },
   ];
 
-  function handleAddTask() {
+  async function handleAddTask() {
     if (!newTaskName.trim()) return;
-    const newTask: Task = {
-      id: `t-${Date.now()}`,
-      name: newTaskName.trim(),
-      description: null,
-      htmlDescription: null,
-      status: "not_started",
-      priority: "none",
-      type: "task",
-      completed: false,
-      completedAt: null,
-      assigneeId: "demo-user",
-      projectId: null,
-      sectionId: null,
-      parentTaskId: null,
-      order: tasks.length,
-      dueDate: null,
-      startDate: null,
-      estimatedMinutes: null,
-      actualMinutes: null,
-      tagIds: [],
-      followerIds: [],
-      subtaskIds: [],
-      dependencyIds: [],
-      approvalStatus: null,
-      approverIds: [],
-      likes: 0,
-      attachmentCount: 0,
-      commentCount: 0,
-      customFieldValues: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setTasks((prev) => [newTask, ...prev]);
-    setNewTaskName("");
-    setShowAddTask(false);
+    try {
+      const { createTask } = await import("@/app/actions/task-actions");
+      const result = await createTask({ title: newTaskName.trim() });
+      if (result && !("error" in result)) {
+        setNewTaskName("");
+        setShowAddTask(false);
+        loadTasks();
+      }
+    } catch {
+      // ignore
+    }
   }
 
-  function toggleComplete(taskId: string) {
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === taskId
-          ? {
-              ...t,
-              completed: !t.completed,
-              completedAt: t.completed ? null : new Date().toISOString(),
-              status: t.completed ? "not_started" : "completed",
-            }
-          : t
-      )
+  async function handleToggleComplete(taskId: string) {
+    try {
+      const { toggleComplete } = await import("@/app/actions/task-actions");
+      await toggleComplete(taskId);
+      loadTasks();
+    } catch {
+      // ignore
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-4xl p-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">My Tasks</h1>
+        <div className="animate-pulse space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-12 rounded-lg bg-gray-100" />
+          ))}
+        </div>
+      </div>
     );
   }
 
@@ -339,7 +137,7 @@ export default function MyTasksPage() {
           >
             <option value="due_date">Sort by due date</option>
             <option value="priority">Sort by priority</option>
-            <option value="name">Sort by name</option>
+            <option value="title">Sort by name</option>
           </select>
           <button
             onClick={() => setShowAddTask(true)}
@@ -428,7 +226,7 @@ export default function MyTasksPage() {
                 className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50"
               >
                 <button
-                  onClick={() => toggleComplete(task.id)}
+                  onClick={() => handleToggleComplete(task.id)}
                   className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition ${
                     task.completed
                       ? "border-green-500 bg-green-500 text-white"
@@ -447,12 +245,17 @@ export default function MyTasksPage() {
                       task.completed ? "text-gray-400 line-through" : "text-gray-900"
                     }`}
                   >
-                    {task.name}
+                    {task.title}
                   </p>
+                  {(task as Record<string, unknown>).project && (
+                    <p className="text-xs text-gray-400">
+                      {((task as Record<string, unknown>).project as { name: string })?.name}
+                    </p>
+                  )}
                 </div>
-                {task.priority !== "none" && (
+                {task.priority && task.priority !== "none" && (
                   <span
-                    className={`rounded px-2 py-0.5 text-xs font-medium ${priorityColor[task.priority]}`}
+                    className={`rounded px-2 py-0.5 text-xs font-medium ${priorityColor[task.priority] || ""}`}
                   >
                     {task.priority}
                   </span>

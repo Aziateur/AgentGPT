@@ -69,7 +69,7 @@ export function SubtaskList({
     setEditingId(null);
     const trimmed = editValue.trim();
     if (trimmed && trimmed !== originalName) {
-      onUpdateSubtask?.(subtaskId, { name: trimmed });
+      onUpdateSubtask?.(subtaskId, { title: trimmed });
     }
     setEditValue("");
   };
@@ -119,9 +119,9 @@ export function SubtaskList({
                   type="text"
                   value={editValue}
                   onChange={(e) => setEditValue(e.target.value)}
-                  onBlur={() => handleEditCommit(subtask.id, subtask.name)}
+                  onBlur={() => handleEditCommit(subtask.id, subtask.title || (subtask as Record<string, unknown>).name as string || "")}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") handleEditCommit(subtask.id, subtask.name);
+                    if (e.key === "Enter") handleEditCommit(subtask.id, subtask.title || (subtask as Record<string, unknown>).name as string || "");
                     if (e.key === "Escape") {
                       setEditingId(null);
                       setEditValue("");
@@ -134,7 +134,7 @@ export function SubtaskList({
                   onClick={() => onClickSubtask?.(subtask.id)}
                   onDoubleClick={() => {
                     setEditingId(subtask.id);
-                    setEditValue(subtask.name);
+                    setEditValue(subtask.title || (subtask as Record<string, unknown>).name as string || "");
                   }}
                   className={cn(
                     "flex-1 min-w-0 text-left text-sm truncate transition-colors",
@@ -143,7 +143,7 @@ export function SubtaskList({
                       : "text-gray-700 hover:text-gray-900"
                   )}
                 >
-                  {subtask.name}
+                  {subtask.title || (subtask as Record<string, unknown>).name as string || ""}
                 </button>
               )}
               {subtask.completed && (

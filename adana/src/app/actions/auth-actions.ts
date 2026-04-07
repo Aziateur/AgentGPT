@@ -61,7 +61,8 @@ export async function login(email: string, password: string) {
 
 export async function getCurrentUser() {
   try {
-    // For demo: return the first user, or seed a demo user
+    // DEMO ONLY: In production, this should read from a session/cookie.
+    // For demo purposes we return the first user in the DB.
     let user = await prisma.user.findFirst({
       orderBy: { createdAt: "asc" },
     });

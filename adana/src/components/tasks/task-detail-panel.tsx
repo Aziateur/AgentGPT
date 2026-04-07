@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   X,
   User,
@@ -27,47 +27,13 @@ import {
 import { SubtaskList } from "./subtask-list";
 import type { Task, Comment as CommentType } from "@/types";
 
-// -- Mock data ----------------------------------------------------------------
-
-const mockSubtasks: Task[] = [
-  { id: "st1", name: "Create wireframe sketch", title: "Create wireframe sketch", description: null, htmlDescription: null, status: "completed", priority: "medium", type: "task", completed: true, completedAt: new Date().toISOString(), assigneeId: "user-2", creatorId: "demo-user", projectId: "p1", sectionId: "s1", parentTaskId: "t1", order: 0, position: 0, dueDate: null, startDate: null, estimatedMinutes: null, actualMinutes: null, tagIds: [], followerIds: [], subtaskIds: [], dependencyIds: [], approvalStatus: null, approverIds: [], likes: 0, attachmentCount: 0, commentCount: 0, customFieldValues: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: "st2", name: "Get stakeholder feedback", title: "Get stakeholder feedback", description: null, htmlDescription: null, status: "in_progress", priority: "high", type: "task", completed: false, completedAt: null, assigneeId: "demo-user", creatorId: "demo-user", projectId: "p1", sectionId: "s1", parentTaskId: "t1", order: 1, position: 1, dueDate: new Date(Date.now() + 172800000).toISOString(), startDate: null, estimatedMinutes: null, actualMinutes: null, tagIds: [], followerIds: [], subtaskIds: [], dependencyIds: [], approvalStatus: null, approverIds: [], likes: 0, attachmentCount: 0, commentCount: 0, customFieldValues: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: "st3", name: "Finalize design", title: "Finalize design", description: null, htmlDescription: null, status: "not_started", priority: "medium", type: "task", completed: false, completedAt: null, assigneeId: null, creatorId: "demo-user", projectId: "p1", sectionId: "s1", parentTaskId: "t1", order: 2, position: 2, dueDate: null, startDate: null, estimatedMinutes: null, actualMinutes: null, tagIds: [], followerIds: [], subtaskIds: [], dependencyIds: [], approvalStatus: null, approverIds: [], likes: 0, attachmentCount: 0, commentCount: 0, customFieldValues: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-];
-
-const mockComments: CommentType[] = [
-  { id: "c1", taskId: "t1", authorId: "user-2", text: "Looking great! Can we also add a dark mode variant?", htmlText: null, isPinned: false, parentCommentId: null, likes: 2, createdAt: new Date(Date.now() - 7200000).toISOString(), updatedAt: new Date(Date.now() - 7200000).toISOString() },
-  { id: "c2", taskId: "t1", authorId: "demo-user", text: "Good idea, I will add that to the scope.", htmlText: null, isPinned: false, parentCommentId: null, likes: 1, createdAt: new Date(Date.now() - 3600000).toISOString(), updatedAt: new Date(Date.now() - 3600000).toISOString() },
-];
-
-const mockDependencies = [
-  { id: "d1", label: "Set up project structure", type: "blocked_by", completed: true },
-  { id: "d2", label: "Create color palette", type: "blocking", completed: false },
-];
-
-const mockTags = [
-  { id: "tg1", name: "Design", color: "#7c3aed" },
-  { id: "tg2", name: "Q2", color: "#059669" },
-];
-
-const assignees: Record<string, { name: string; initial: string; color: string }> = {
-  "demo-user": { name: "Demo User", initial: "D", color: "bg-indigo-100 text-indigo-600" },
-  "user-2": { name: "Sarah Chen", initial: "S", color: "bg-purple-100 text-purple-600" },
-  "user-3": { name: "Alex Kim", initial: "A", color: "bg-blue-100 text-blue-600" },
-};
+// -- Helpers ------------------------------------------------------------------
 
 const priorityConfig: Record<string, { label: string; color: string }> = {
   high: { label: "High", color: "text-red-600 bg-red-50" },
   medium: { label: "Medium", color: "text-yellow-600 bg-yellow-50" },
   low: { label: "Low", color: "text-blue-600 bg-blue-50" },
   none: { label: "None", color: "text-gray-500 bg-gray-50" },
-};
-
-const statusConfig: Record<string, { label: string; color: string }> = {
-  not_started: { label: "Not Started", color: "text-gray-600 bg-gray-100" },
-  in_progress: { label: "In Progress", color: "text-blue-600 bg-blue-50" },
-  completed: { label: "Completed", color: "text-green-600 bg-green-50" },
-  deferred: { label: "Deferred", color: "text-orange-600 bg-orange-50" },
 };
 
 function timeAgo(iso: string) {
@@ -84,63 +50,143 @@ function timeAgo(iso: string) {
 export interface TaskDetailPanelProps {
   task: Task;
   onClose?: () => void;
-  onUpdate?: (taskId: string, updates: Partial<Task>) => void;
+  onUpdate?: (taskId: string, updates: Partial<Task>) => void | Promise<void>;
+  onDelete?: (taskId: string) => void | Promise<void>;
+  onDuplicate?: (taskId: string) => void | Promise<void>;
+  onToggleComplete?: (taskId: string) => void | Promise<void>;
+  onAddComment?: (taskId: string, text: string) => void | Promise<void>;
+  onAddSubtask?: (parentId: string, title: string) => void | Promise<void>;
+  onToggleSubtaskComplete?: (subtaskId: string) => void | Promise<void>;
+  onToggleLike?: (taskId: string) => void | Promise<void>;
+  onToggleFollow?: (taskId: string) => void | Promise<void>;
+  onSetApprovalStatus?: (taskId: string, status: string) => void | Promise<void>;
 }
 
 // -- Component ----------------------------------------------------------------
 
-export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProps) {
-  const [title, setTitle] = useState(task.name);
+export function TaskDetailPanel({
+  task,
+  onClose,
+  onUpdate,
+  onDelete,
+  onDuplicate,
+  onToggleComplete,
+  onAddComment,
+  onAddSubtask,
+  onToggleSubtaskComplete,
+  onToggleLike,
+  onToggleFollow,
+  onSetApprovalStatus,
+}: TaskDetailPanelProps) {
+  const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description || "");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [showDeps, setShowDeps] = useState(true);
   const [showCustomFields, setShowCustomFields] = useState(true);
   const [showActions, setShowActions] = useState(false);
   const [liked, setLiked] = useState(false);
-  const [following, setFollowing] = useState(true);
+  const [following, setFollowing] = useState(false);
   const [newComment, setNewComment] = useState("");
-  const [comments, setComments] = useState(mockComments);
-  const [subtasks, setSubtasks] = useState(mockSubtasks);
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
-  const assignee = task.assigneeId ? assignees[task.assigneeId] : null;
-  const priority = priorityConfig[task.priority] || priorityConfig.none;
-  const status = statusConfig[task.status] || statusConfig.not_started;
-  const isMilestone = task.type === "milestone";
-  const isApproval = task.type === "approval";
+  // Derive data from task prop
+  const subtasks: Task[] = (task.subtasks as Task[]) || [];
+  const comments: CommentType[] = (task.comments as CommentType[]) || [];
+  const blockedBy = task.blockedBy || [];
+  const blocking = task.blocking || [];
+  const tags = task.tags || [];
+  const customValues = task.customValues || [];
+  const followers = task.followers || [];
+  const likes = task.likes || [];
+
+  // Sync state when task prop changes
+  useEffect(() => {
+    setTitle(task.title);
+    setDescription(task.description || "");
+  }, [task.id, task.title, task.description]);
+
+  // Check if current user has liked/followed (approximate - check if any like/follower exists)
+  useEffect(() => {
+    setLiked((likes as Array<{ userId?: string }>).length > 0);
+    setFollowing((followers as Array<{ userId?: string }>).length > 0);
+  }, [likes, followers]);
+
+  const assignee = task.assignee;
+  const priority = priorityConfig[task.priority || "none"] || priorityConfig.none;
+  const isMilestone = task.taskType === "milestone";
+  const isApproval = task.taskType === "approval";
 
   function handleTitleBlur() {
     setIsEditingTitle(false);
-    if (title.trim() && title.trim() !== task.name) {
-      onUpdate?.(task.id, { name: title.trim() });
+    if (title.trim() && title.trim() !== task.title) {
+      onUpdate?.(task.id, { title: title.trim() });
     }
   }
 
-  function handleAddComment() {
-    if (!newComment.trim()) return;
-    const comment: CommentType = {
-      id: `c${Date.now()}`,
-      taskId: task.id,
-      authorId: "demo-user",
-      text: newComment.trim(),
-      htmlText: null,
-      isPinned: false,
-      parentCommentId: null,
-      likes: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setComments([...comments, comment]);
-    setNewComment("");
+  function handleDescriptionBlur() {
+    if (description !== (task.description || "")) {
+      onUpdate?.(task.id, { description });
+    }
+  }
+
+  async function handleAddComment() {
+    if (!newComment.trim() || isSubmittingComment) return;
+    setIsSubmittingComment(true);
+    try {
+      await onAddComment?.(task.id, newComment.trim());
+      setNewComment("");
+    } finally {
+      setIsSubmittingComment(false);
+    }
+  }
+
+  async function handleLike() {
+    setLiked(!liked);
+    await onToggleLike?.(task.id);
+  }
+
+  async function handleFollow() {
+    setFollowing(!following);
+    await onToggleFollow?.(task.id);
+  }
+
+  async function handleDelete() {
+    setShowActions(false);
+    await onDelete?.(task.id);
+  }
+
+  async function handleDuplicate() {
+    setShowActions(false);
+    await onDuplicate?.(task.id);
+  }
+
+  async function handleApprove() {
+    await onSetApprovalStatus?.(task.id, "approved");
+  }
+
+  async function handleReject() {
+    await onSetApprovalStatus?.(task.id, "rejected");
   }
 
   return (
     <div className="flex h-full flex-col border-l border-gray-200 bg-white">
       {/* Top bar */}
       <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-3">
-        {/* Status */}
-        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${status.color}`}>
-          {status.label}
-        </span>
+        {/* Completed indicator */}
+        <button
+          onClick={() => onToggleComplete?.(task.id)}
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition ${
+            task.completed
+              ? "border-green-500 bg-green-500 text-white"
+              : "border-gray-300 hover:border-gray-400"
+          }`}
+        >
+          {task.completed && (
+            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+            </svg>
+          )}
+        </button>
 
         {/* Milestone / Approval indicator */}
         {isMilestone && (
@@ -158,7 +204,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
 
         {/* Like */}
         <button
-          onClick={() => setLiked(!liked)}
+          onClick={handleLike}
           className={`rounded p-1.5 transition ${liked ? "text-red-500" : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"}`}
           title="Like"
         >
@@ -167,7 +213,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
 
         {/* Follow */}
         <button
-          onClick={() => setFollowing(!following)}
+          onClick={handleFollow}
           className={`rounded p-1.5 transition ${following ? "text-indigo-500" : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"}`}
           title={following ? "Unfollow" : "Follow"}
         >
@@ -184,14 +230,20 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
           </button>
           {showActions && (
             <div className="absolute right-0 top-full z-10 mt-1 w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
-              <button className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+              <button
+                onClick={handleDuplicate}
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
                 <Copy className="h-3.5 w-3.5" /> Duplicate
               </button>
               <button className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
                 <ArrowRightLeft className="h-3.5 w-3.5" /> Move to...
               </button>
               <div className="my-1 border-t border-gray-100" />
-              <button className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50">
+              <button
+                onClick={handleDelete}
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+              >
                 <Trash2 className="h-3.5 w-3.5" /> Delete
               </button>
             </div>
@@ -217,7 +269,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onBlur={handleTitleBlur}
-              onKeyDown={(e) => { if (e.key === "Enter") handleTitleBlur(); if (e.key === "Escape") { setTitle(task.name); setIsEditingTitle(false); } }}
+              onKeyDown={(e) => { if (e.key === "Enter") handleTitleBlur(); if (e.key === "Escape") { setTitle(task.title); setIsEditingTitle(false); } }}
               autoFocus
               className="mb-4 w-full border-b-2 border-indigo-400 bg-transparent text-lg font-bold text-gray-900 outline-none"
             />
@@ -226,17 +278,23 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
               onClick={() => setIsEditingTitle(true)}
               className="mb-4 cursor-text text-lg font-bold text-gray-900 hover:text-indigo-700"
             >
-              {task.name}
+              {task.title}
             </h2>
           )}
 
           {/* Approval buttons */}
           {isApproval && task.approvalStatus === "pending" && (
             <div className="mb-4 flex gap-2">
-              <button className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
+              <button
+                onClick={handleApprove}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+              >
                 <ThumbsUp className="h-4 w-4" /> Approve
               </button>
-              <button className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700">
+              <button
+                onClick={handleReject}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              >
                 <ThumbsDown className="h-4 w-4" /> Reject
               </button>
             </div>
@@ -250,8 +308,8 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
               <span className="w-20 text-xs text-gray-500">Assignee</span>
               {assignee ? (
                 <div className="flex items-center gap-2">
-                  <div className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-medium ${assignee.color}`}>
-                    {assignee.initial}
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-medium text-indigo-600">
+                    {(assignee.name || "?")[0].toUpperCase()}
                   </div>
                   <span className="text-sm text-gray-900">{assignee.name}</span>
                 </div>
@@ -284,7 +342,9 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
             <div className="flex items-center gap-3">
               <FolderKanban className="h-4 w-4 text-gray-400" />
               <span className="w-20 text-xs text-gray-500">Project</span>
-              <span className="text-sm text-gray-900">Website Redesign</span>
+              <span className="text-sm text-gray-900">
+                {task.project ? (task.project as { name: string }).name : "No project"}
+              </span>
             </div>
 
             {/* Tags */}
@@ -292,18 +352,21 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
               <Tag className="h-4 w-4 text-gray-400" />
               <span className="w-20 text-xs text-gray-500">Tags</span>
               <div className="flex items-center gap-1.5">
-                {mockTags.map((tag) => (
-                  <span
-                    key={tag.id}
-                    className="rounded-full px-2 py-0.5 text-[11px] font-medium"
-                    style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
-                  >
-                    {tag.name}
-                  </span>
-                ))}
-                <button className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
-                  <Plus className="h-3 w-3" />
-                </button>
+                {(tags as Array<{ tag?: { id: string; name: string; color: string }; id: string }>).map((tt) => {
+                  const t = tt.tag || tt;
+                  return (
+                    <span
+                      key={t.id}
+                      className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                      style={{ backgroundColor: `${(t as { color?: string }).color || "#6366f1"}20`, color: (t as { color?: string }).color || "#6366f1" }}
+                    >
+                      {(t as { name: string }).name}
+                    </span>
+                  );
+                })}
+                {tags.length === 0 && (
+                  <span className="text-sm text-gray-400">No tags</span>
+                )}
               </div>
             </div>
           </div>
@@ -316,6 +379,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              onBlur={handleDescriptionBlur}
               placeholder="Add a description..."
               rows={3}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
@@ -329,22 +393,11 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
             </h3>
             <SubtaskList
               subtasks={subtasks}
-              onToggleComplete={(id, completed) =>
-                setSubtasks((prev) =>
-                  prev.map((s) => (s.id === id ? { ...s, completed, completedAt: completed ? new Date().toISOString() : null } : s))
-                )
-              }
+              onToggleComplete={(id) => {
+                onToggleSubtaskComplete?.(id);
+              }}
               onAddSubtask={(name) => {
-                const newSubtask: Task = {
-                  id: `st${Date.now()}`, name, title: name, description: null, htmlDescription: null,
-                  status: "not_started", priority: "none", type: "task", completed: false, completedAt: null,
-                  assigneeId: null, creatorId: "demo-user", projectId: task.projectId, sectionId: task.sectionId,
-                  parentTaskId: task.id, order: subtasks.length, position: subtasks.length, dueDate: null, startDate: null,
-                  estimatedMinutes: null, actualMinutes: null, tagIds: [], followerIds: [], subtaskIds: [],
-                  dependencyIds: [], approvalStatus: null, approverIds: [], likes: 0, attachmentCount: 0,
-                  commentCount: 0, customFieldValues: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-                };
-                setSubtasks([...subtasks, newSubtask]);
+                onAddSubtask?.(task.id, name);
               }}
             />
           </div>
@@ -360,15 +413,27 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
             </button>
             {showDeps && (
               <div className="space-y-2">
-                {mockDependencies.map((dep) => (
+                {(blockedBy as Array<{ id: string; blockingTask?: { id: string; title: string; completed: boolean } }>).map((dep) => (
                   <div key={dep.id} className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2">
                     <Link2 className="h-3.5 w-3.5 text-gray-400" />
-                    <span className="text-xs capitalize text-gray-500">{dep.type.replace("_", " ")}</span>
-                    <span className={`flex-1 text-sm ${dep.completed ? "text-gray-400 line-through" : "text-gray-900"}`}>
-                      {dep.label}
+                    <span className="text-xs text-gray-500">blocked by</span>
+                    <span className={`flex-1 text-sm ${dep.blockingTask?.completed ? "text-gray-400 line-through" : "text-gray-900"}`}>
+                      {dep.blockingTask?.title || "Unknown task"}
                     </span>
                   </div>
                 ))}
+                {(blocking as Array<{ id: string; blockedTask?: { id: string; title: string; completed: boolean } }>).map((dep) => (
+                  <div key={dep.id} className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2">
+                    <Link2 className="h-3.5 w-3.5 text-gray-400" />
+                    <span className="text-xs text-gray-500">blocking</span>
+                    <span className={`flex-1 text-sm ${dep.blockedTask?.completed ? "text-gray-400 line-through" : "text-gray-900"}`}>
+                      {dep.blockedTask?.title || "Unknown task"}
+                    </span>
+                  </div>
+                ))}
+                {blockedBy.length === 0 && blocking.length === 0 && (
+                  <p className="text-xs text-gray-400">No dependencies</p>
+                )}
                 <button className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600">
                   <Plus className="h-3 w-3" /> Add dependency
                 </button>
@@ -387,14 +452,15 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
             </button>
             {showCustomFields && (
               <div className="space-y-2 text-sm text-gray-500">
-                <div className="flex items-center gap-3">
-                  <span className="w-24 text-xs">Story Points</span>
-                  <span className="text-gray-900">5</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="w-24 text-xs">Sprint</span>
-                  <span className="text-gray-900">Sprint 14</span>
-                </div>
+                {(customValues as Array<{ id: string; value?: string | null; field?: { name: string } }>).map((cv) => (
+                  <div key={cv.id} className="flex items-center gap-3">
+                    <span className="w-24 text-xs">{cv.field?.name || "Field"}</span>
+                    <span className="text-gray-900">{cv.value || "---"}</span>
+                  </div>
+                ))}
+                {customValues.length === 0 && (
+                  <p className="text-xs text-gray-400">No custom fields</p>
+                )}
                 <button className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600">
                   <Plus className="h-3 w-3" /> Add field
                 </button>
@@ -410,21 +476,22 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
             </h3>
             <div className="space-y-3">
               {comments.map((comment) => {
-                const author = assignees[comment.authorId] || { name: "Unknown", initial: "?", color: "bg-gray-100 text-gray-600" };
+                const author = comment.author;
+                const initial = author?.name?.[0]?.toUpperCase() || "?";
                 return (
                   <div key={comment.id} className="flex gap-2">
-                    <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${author.color}`}>
-                      {author.initial}
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-medium text-indigo-600">
+                      {initial}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-gray-900">{author.name}</span>
+                        <span className="text-xs font-medium text-gray-900">{author?.name || "Unknown"}</span>
                         <span className="text-[10px] text-gray-400">{timeAgo(comment.createdAt)}</span>
                       </div>
                       <p className="mt-0.5 text-sm text-gray-700">{comment.text}</p>
-                      {comment.likes > 0 && (
+                      {comment.likes && (comment.likes as unknown[]).length > 0 && (
                         <span className="mt-1 inline-flex items-center gap-0.5 text-[10px] text-gray-400">
-                          <Heart className="h-2.5 w-2.5" /> {comment.likes}
+                          <Heart className="h-2.5 w-2.5" /> {(comment.likes as unknown[]).length}
                         </span>
                       )}
                     </div>
@@ -436,7 +503,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
             {/* Add comment */}
             <div className="mt-4 flex gap-2">
               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-medium text-indigo-600">
-                D
+                U
               </div>
               <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-gray-200 px-3 py-2">
                 <input
@@ -449,7 +516,7 @@ export function TaskDetailPanel({ task, onClose, onUpdate }: TaskDetailPanelProp
                 />
                 <button
                   onClick={handleAddComment}
-                  disabled={!newComment.trim()}
+                  disabled={!newComment.trim() || isSubmittingComment}
                   className="rounded p-1 text-indigo-600 hover:bg-indigo-50 disabled:opacity-30"
                 >
                   <Send className="h-3.5 w-3.5" />

@@ -25,8 +25,12 @@ export default function RegisterPage() {
 
     try {
       const { register } = await import("@/app/actions/auth-actions");
-      await register(name, email, password);
-      window.location.href = "/home";
+      const result = await register(name, email, password);
+      if (result?.error) {
+        setError(result.error);
+      } else {
+        window.location.href = "/home";
+      }
     } catch {
       setError("Registration failed. Please try again.");
     } finally {

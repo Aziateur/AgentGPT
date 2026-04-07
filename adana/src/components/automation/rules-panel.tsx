@@ -32,10 +32,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { AutomationRule, AutomationTrigger, AutomationAction } from "@/types";
+import type { AutomationTrigger, AutomationAction } from "@/types";
 
 // ---------------------------------------------------------------------------
-// Mock data
+// Labels & icons
 // ---------------------------------------------------------------------------
 
 const TRIGGER_LABELS: Record<AutomationTrigger, string> = {
@@ -64,6 +64,56 @@ const TRIGGER_ICONS: Record<AutomationTrigger, React.ReactNode> = {
   due_date_approaching: <Clock className="h-4 w-4" />,
   status_changed: <AlertTriangle className="h-4 w-4" />,
   custom_field_changed: <FileText className="h-4 w-4" />,
+};
+
+// Map DB field names to UI type names
+const TRIGGER_TYPE_MAP: Record<string, AutomationTrigger> = {
+  task_created: "task_added",
+  task_completed: "task_completed",
+  task_moved: "task_moved_to_section",
+  due_date_approaching: "due_date_approaching",
+  assignee_changed: "status_changed",
+  field_changed: "custom_field_changed",
+  // Also support direct UI values
+  task_added: "task_added",
+  task_moved_to_section: "task_moved_to_section",
+  status_changed: "status_changed",
+  custom_field_changed: "custom_field_changed",
+};
+
+const ACTION_TYPE_MAP: Record<string, AutomationAction> = {
+  assign: "assign_task",
+  move_section: "move_to_section",
+  set_field: "set_custom_field",
+  add_comment: "add_comment",
+  mark_complete: "mark_complete",
+  set_priority: "set_custom_field",
+  // Also support direct UI values
+  assign_task: "assign_task",
+  set_due_date: "set_due_date",
+  move_to_section: "move_to_section",
+  set_custom_field: "set_custom_field",
+  create_subtask: "create_subtask",
+};
+
+// Reverse maps for saving to DB
+const TRIGGER_TO_DB: Record<AutomationTrigger, string> = {
+  task_added: "task_created",
+  task_completed: "task_completed",
+  task_moved_to_section: "task_moved",
+  due_date_approaching: "due_date_approaching",
+  status_changed: "assignee_changed",
+  custom_field_changed: "field_changed",
+};
+
+const ACTION_TO_DB: Record<AutomationAction, string> = {
+  assign_task: "assign",
+  set_due_date: "set_field",
+  move_to_section: "move_section",
+  add_comment: "add_comment",
+  mark_complete: "mark_complete",
+  set_custom_field: "set_field",
+  create_subtask: "add_comment",
 };
 
 interface PresetTemplate {
@@ -110,104 +160,39 @@ const PRESET_TEMPLATES: PresetTemplate[] = [
   },
 ];
 
+interface RuleData {
+  id: string;
+  name: string;
+  active: boolean;
+  triggerType: string;
+  triggerConfig: string;
+  actionType: string;
+  actionConfig: string;
+  projectId: string;
+  creatorId: string;
+  _count?: { executions: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface ExecutionLog {
   id: string;
   ruleId: string;
-  ruleName: string;
-  trigger: string;
-  action: string;
-  taskName: string;
-  executedAt: string;
   success: boolean;
+  details: string | null;
+  createdAt: string;
+  user: { id: string; name: string; avatar: string | null } | null;
 }
 
-const mockRules: (AutomationRule & { executionCount: number })[] = [
-  {
-    id: "rule-1",
-    name: "Auto-assign new tasks to Sarah",
-    projectId: "proj-1",
-    enabled: true,
-    trigger: "task_added",
-    triggerConfig: {},
-    action: "assign_task",
-    actionConfig: { assigneeId: "user-2", assigneeName: "Sarah Chen" },
-    createdById: "user-1",
-    executionCount: 47,
-    createdAt: "2026-01-15T10:00:00Z",
-    updatedAt: "2026-03-20T14:30:00Z",
-  },
-  {
-    id: "rule-2",
-    name: "Move completed to Done section",
-    projectId: "proj-1",
-    enabled: true,
-    trigger: "task_completed",
-    triggerConfig: {},
-    action: "move_to_section",
-    actionConfig: { sectionId: "section-done", sectionName: "Done" },
-    createdById: "user-1",
-    executionCount: 123,
-    createdAt: "2026-01-10T09:00:00Z",
-    updatedAt: "2026-03-28T11:00:00Z",
-  },
-  {
-    id: "rule-3",
-    name: "Flag approaching deadlines",
-    projectId: "proj-1",
-    enabled: false,
-    trigger: "due_date_approaching",
-    triggerConfig: { daysBefore: 2 },
-    action: "add_comment",
-    actionConfig: { comment: "This task is due soon!" },
-    createdById: "user-1",
-    executionCount: 8,
-    createdAt: "2026-02-20T16:00:00Z",
-    updatedAt: "2026-03-01T10:00:00Z",
-  },
-];
-
-const mockExecutionLogs: ExecutionLog[] = [
-  {
-    id: "exec-1",
-    ruleId: "rule-2",
-    ruleName: "Move completed to Done section",
-    trigger: "Task completed",
-    action: "Moved to Done",
-    taskName: "Design landing page",
-    executedAt: "2026-04-03T09:15:00Z",
-    success: true,
-  },
-  {
-    id: "exec-2",
-    ruleId: "rule-1",
-    ruleName: "Auto-assign new tasks to Sarah",
-    trigger: "Task added",
-    action: "Assigned to Sarah Chen",
-    taskName: "Write API documentation",
-    executedAt: "2026-04-03T08:30:00Z",
-    success: true,
-  },
-  {
-    id: "exec-3",
-    ruleId: "rule-2",
-    ruleName: "Move completed to Done section",
-    trigger: "Task completed",
-    action: "Moved to Done",
-    taskName: "Fix login bug",
-    executedAt: "2026-04-02T17:45:00Z",
-    success: true,
-  },
-  {
-    id: "exec-4",
-    ruleId: "rule-1",
-    ruleName: "Auto-assign new tasks to Sarah",
-    trigger: "Task added",
-    action: "Assigned to Sarah Chen",
-    taskName: "Set up CI pipeline",
-    executedAt: "2026-04-02T14:20:00Z",
-    success: false,
-  },
-];
+// Normalized rule for display
+interface DisplayRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  trigger: AutomationTrigger;
+  action: AutomationAction;
+  executionCount: number;
+}
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -219,9 +204,9 @@ function RuleRow({
   onEdit,
   onDelete,
 }: {
-  rule: (typeof mockRules)[0];
+  rule: DisplayRule;
   onToggle: (id: string) => void;
-  onEdit: (rule: (typeof mockRules)[0]) => void;
+  onEdit: (rule: DisplayRule) => void;
   onDelete: (id: string) => void;
 }) {
   return (
@@ -288,48 +273,117 @@ function RuleRow({
 // Main component
 // ---------------------------------------------------------------------------
 
-export function RulesPanel() {
-  const [rules, setRules] = React.useState(mockRules);
+interface RulesPanelProps {
+  projectId: string;
+}
+
+export function RulesPanel({ projectId }: RulesPanelProps) {
+  const [rules, setRules] = React.useState<DisplayRule[]>([]);
+  const [loading, setLoading] = React.useState(true);
   const [showCreate, setShowCreate] = React.useState(false);
   const [showHistory, setShowHistory] = React.useState(false);
-  const [editingRule, setEditingRule] = React.useState<(typeof mockRules)[0] | null>(null);
+  const [editingRule, setEditingRule] = React.useState<DisplayRule | null>(null);
+  const [executionLogs, setExecutionLogs] = React.useState<ExecutionLog[]>([]);
 
   // Create form state
   const [newName, setNewName] = React.useState("");
   const [newTrigger, setNewTrigger] = React.useState<AutomationTrigger>("task_added");
   const [newAction, setNewAction] = React.useState<AutomationAction>("assign_task");
 
-  const handleToggle = (id: string) => {
+  const loadRules = React.useCallback(async () => {
+    try {
+      const { getRules } = await import("@/app/actions/automation-actions");
+      const data = await getRules(projectId);
+      const display: DisplayRule[] = (data as RuleData[]).map((r) => ({
+        id: r.id,
+        name: r.name,
+        enabled: r.active,
+        trigger: TRIGGER_TYPE_MAP[r.triggerType] || "task_added",
+        action: ACTION_TYPE_MAP[r.actionType] || "assign_task",
+        executionCount: r._count?.executions || 0,
+      }));
+      setRules(display);
+    } catch {
+      // keep empty
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId]);
+
+  React.useEffect(() => {
+    loadRules();
+  }, [loadRules]);
+
+  const handleToggle = async (id: string) => {
+    // Optimistic update
     setRules((prev) =>
       prev.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r))
     );
+    const { toggleRule } = await import("@/app/actions/automation-actions");
+    const result = await toggleRule(id);
+    if (result.error) {
+      // Revert
+      loadRules();
+    }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     setRules((prev) => prev.filter((r) => r.id !== id));
+    const { deleteRule } = await import("@/app/actions/automation-actions");
+    const result = await deleteRule(id);
+    if (result.error) {
+      loadRules();
+    }
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!newName.trim()) return;
-    const rule: (typeof mockRules)[0] = {
-      id: `rule-${Date.now()}`,
-      name: newName,
-      projectId: "proj-1",
-      enabled: true,
-      trigger: newTrigger,
-      triggerConfig: {},
-      action: newAction,
-      actionConfig: {},
-      createdById: "user-1",
-      executionCount: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setRules((prev) => [...prev, rule]);
+
+    if (editingRule) {
+      // Update existing rule
+      const { updateRule } = await import("@/app/actions/automation-actions");
+      await updateRule(editingRule.id, {
+        name: newName || editingRule.name,
+        triggerType: TRIGGER_TO_DB[newTrigger],
+        triggerConfig: {},
+        actionType: ACTION_TO_DB[newAction],
+        actionConfig: {},
+      });
+      setEditingRule(null);
+    } else {
+      // Create new rule
+      const { createRule } = await import("@/app/actions/automation-actions");
+      await createRule({
+        name: newName,
+        projectId,
+        triggerType: TRIGGER_TO_DB[newTrigger],
+        triggerConfig: {},
+        actionType: ACTION_TO_DB[newAction],
+        actionConfig: {},
+      });
+    }
+
     setNewName("");
     setNewTrigger("task_added");
     setNewAction("assign_task");
     setShowCreate(false);
+    loadRules();
+  };
+
+  const handleShowHistory = async () => {
+    setShowHistory(true);
+    // Load execution history for all rules in this project
+    const { getRuleExecutions } = await import("@/app/actions/automation-actions");
+    const allLogs: ExecutionLog[] = [];
+    for (const rule of rules) {
+      const logs = await getRuleExecutions(rule.id);
+      allLogs.push(...(logs as ExecutionLog[]));
+    }
+    allLogs.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    setExecutionLogs(allLogs);
   };
 
   const handleApplyPreset = (preset: PresetTemplate) => {
@@ -338,6 +392,22 @@ export function RulesPanel() {
     setNewAction(preset.action);
     setShowCreate(true);
   };
+
+  const handleEdit = (rule: DisplayRule) => {
+    setNewName(rule.name);
+    setNewTrigger(rule.trigger);
+    setNewAction(rule.action);
+    setEditingRule(rule);
+    setShowCreate(true);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -349,7 +419,7 @@ export function RulesPanel() {
           <Badge variant="default">{rules.length}</Badge>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setShowHistory(true)}>
+          <Button variant="ghost" size="sm" onClick={handleShowHistory}>
             <Clock className="h-4 w-4" />
             History
           </Button>
@@ -403,7 +473,7 @@ export function RulesPanel() {
                   key={rule.id}
                   rule={rule}
                   onToggle={handleToggle}
-                  onEdit={setEditingRule}
+                  onEdit={handleEdit}
                   onDelete={handleDelete}
                 />
               ))}
@@ -418,6 +488,9 @@ export function RulesPanel() {
         onClose={() => {
           setShowCreate(false);
           setEditingRule(null);
+          setNewName("");
+          setNewTrigger("task_added");
+          setNewAction("assign_task");
         }}
         title={editingRule ? "Edit Rule" : "Create Automation Rule"}
         size="lg"
@@ -428,12 +501,8 @@ export function RulesPanel() {
               Rule Name
             </label>
             <Input
-              value={editingRule ? editingRule.name : newName}
-              onChange={(e) =>
-                editingRule
-                  ? setEditingRule({ ...editingRule, name: e.target.value })
-                  : setNewName(e.target.value)
-              }
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
               placeholder="e.g. Auto-assign to Sarah"
             />
           </div>
@@ -444,12 +513,8 @@ export function RulesPanel() {
                 When this happens...
               </label>
               <Select
-                value={editingRule ? editingRule.trigger : newTrigger}
-                onValueChange={(v) =>
-                  editingRule
-                    ? setEditingRule({ ...editingRule, trigger: v as AutomationTrigger })
-                    : setNewTrigger(v as AutomationTrigger)
-                }
+                value={newTrigger}
+                onValueChange={(v) => setNewTrigger(v as AutomationTrigger)}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -469,12 +534,8 @@ export function RulesPanel() {
                 Do this...
               </label>
               <Select
-                value={editingRule ? editingRule.action : newAction}
-                onValueChange={(v) =>
-                  editingRule
-                    ? setEditingRule({ ...editingRule, action: v as AutomationAction })
-                    : setNewAction(v as AutomationAction)
-                }
+                value={newAction}
+                onValueChange={(v) => setNewAction(v as AutomationAction)}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -496,6 +557,9 @@ export function RulesPanel() {
               onClick={() => {
                 setShowCreate(false);
                 setEditingRule(null);
+                setNewName("");
+                setNewTrigger("task_added");
+                setNewAction("assign_task");
               }}
             >
               Cancel
@@ -515,32 +579,37 @@ export function RulesPanel() {
         size="lg"
       >
         <div className="max-h-96 space-y-2 overflow-y-auto">
-          {mockExecutionLogs.map((log) => (
-            <div
-              key={log.id}
-              className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5"
-            >
-              <div
-                className={cn(
-                  "h-2 w-2 shrink-0 rounded-full",
-                  log.success ? "bg-green-500" : "bg-red-500"
-                )}
-              />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm text-gray-900">
-                  <span className="font-medium">{log.ruleName}</span>
-                  <span className="text-gray-500"> on </span>
-                  <span className="font-medium">{log.taskName}</span>
-                </p>
-                <p className="text-xs text-gray-500">
-                  {log.trigger} → {log.action}
-                </p>
-              </div>
-              <span className="shrink-0 text-xs text-gray-400">
-                {formatRelativeDate(log.executedAt)}
-              </span>
+          {executionLogs.length === 0 ? (
+            <div className="py-8 text-center text-sm text-gray-400">
+              No execution history yet.
             </div>
-          ))}
+          ) : (
+            executionLogs.map((log) => (
+              <div
+                key={log.id}
+                className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5"
+              >
+                <div
+                  className={cn(
+                    "h-2 w-2 shrink-0 rounded-full",
+                    log.success ? "bg-green-500" : "bg-red-500"
+                  )}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-gray-900">
+                    <span className="font-medium">
+                      {log.user?.name || "System"}
+                    </span>
+                    <span className="text-gray-500"> - </span>
+                    <span>{log.details || "No details"}</span>
+                  </p>
+                </div>
+                <span className="shrink-0 text-xs text-gray-400">
+                  {formatRelativeDate(log.createdAt)}
+                </span>
+              </div>
+            ))
+          )}
         </div>
       </Modal>
     </div>

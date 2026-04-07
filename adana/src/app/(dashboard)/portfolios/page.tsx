@@ -1,59 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import type { Portfolio, ProjectStatusType } from "@/types";
-
-// -- Mock data ----------------------------------------------------------------
-
-const mockPortfolios = [
-  {
-    id: "pf1",
-    name: "Product Development",
-    description: "All product engineering projects",
-    ownerId: "demo-user",
-    color: "#4f46e5",
-    projectIds: ["p1", "p2", "p5"],
-    memberIds: ["demo-user", "user-2"],
-    privacy: "public" as const,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    projects: [
-      { name: "Website Redesign", status: "on_track" as ProjectStatusType, progress: 62, color: "#4f46e5" },
-      { name: "Mobile App v2", status: "at_risk" as ProjectStatusType, progress: 33, color: "#059669" },
-      { name: "Design System", status: "on_track" as ProjectStatusType, progress: 48, color: "#7c3aed" },
-    ],
-  },
-  {
-    id: "pf2",
-    name: "Marketing Initiatives",
-    description: "Marketing team projects and campaigns",
-    ownerId: "user-5",
-    color: "#d97706",
-    projectIds: ["p3"],
-    memberIds: ["demo-user", "user-5", "user-6"],
-    privacy: "public" as const,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    projects: [
-      { name: "Q1 Marketing Campaign", status: "on_track" as ProjectStatusType, progress: 75, color: "#d97706" },
-    ],
-  },
-  {
-    id: "pf3",
-    name: "Infrastructure",
-    description: "DevOps and platform projects",
-    ownerId: "user-3",
-    color: "#dc2626",
-    projectIds: ["p4"],
-    memberIds: ["demo-user", "user-3"],
-    privacy: "private" as const,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    projects: [
-      { name: "Data Pipeline Upgrade", status: "off_track" as ProjectStatusType, progress: 12, color: "#dc2626" },
-    ],
-  },
-];
+import { useState, useEffect, useCallback } from "react";
+import type { ProjectStatusType } from "@/types";
 
 // -- Helpers ------------------------------------------------------------------
 
@@ -65,17 +13,93 @@ const statusDot: Record<ProjectStatusType, string> = {
   complete: "bg-blue-500",
 };
 
+interface PortfolioData {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string;
+  ownerId: string;
+  owner: { id: string; name: string; avatar: string | null };
+  _count: { projects: number };
+  projects?: {
+    project: {
+      id: string;
+      name: string;
+      color: string;
+      statuses: { status: string }[];
+      _count: { tasks: number; members: number };
+    };
+  }[];
+}
+
 // -- Component ----------------------------------------------------------------
 
 export default function PortfoliosPage() {
-  const [portfolios] = useState(mockPortfolios);
+  const [portfolios, setPortfolios] = useState<PortfolioData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [newColor, setNewColor] = useState("#4f46e5");
+
+  const loadPortfolios = useCallback(async () => {
+    try {
+      const { getPortfolios } = await import("@/app/actions/portfolio-actions");
+      const data = await getPortfolios();
+      // For each portfolio, load its detail to get projects
+      const { getPortfolio } = await import("@/app/actions/portfolio-actions");
+      const detailed = await Promise.all(
+        (data as PortfolioData[]).map(async (p) => {
+          const full = await getPortfolio(p.id);
+          return { ...p, projects: full?.projects || [] } as PortfolioData;
+        })
+      );
+      setPortfolios(detailed);
+    } catch {
+      // keep empty
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPortfolios();
+  }, [loadPortfolios]);
+
+  const handleCreate = async () => {
+    if (!newName.trim()) return;
+    const { createPortfolio } = await import("@/app/actions/portfolio-actions");
+    const result = await createPortfolio({
+      name: newName,
+      description: newDescription || undefined,
+      color: newColor,
+    });
+    if (!result.error) {
+      setNewName("");
+      setNewDescription("");
+      setNewColor("#4f46e5");
+      setShowCreateModal(false);
+      loadPortfolios();
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-5xl p-6">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Portfolios</h1>
-        <button className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+        >
           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
@@ -84,103 +108,153 @@ export default function PortfoliosPage() {
       </div>
 
       {/* Portfolio list */}
-      <div className="space-y-6">
-        {portfolios.map((portfolio) => {
-          const avgProgress = portfolio.projects.length
-            ? Math.round(
-                portfolio.projects.reduce((sum, p) => sum + p.progress, 0) /
-                  portfolio.projects.length
-              )
-            : 0;
+      {portfolios.length === 0 ? (
+        <div className="rounded-xl border border-gray-200 bg-white px-6 py-16 text-center shadow-sm">
+          <p className="text-sm font-medium text-gray-900">No portfolios yet</p>
+          <p className="mt-1 text-sm text-gray-500">Create a portfolio to group your projects.</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {portfolios.map((portfolio) => {
+            const projects = (portfolio.projects || []).map((pp) => {
+              const latestStatus = pp.project.statuses?.[0]?.status || "on_track";
+              return {
+                id: pp.project.id,
+                name: pp.project.name,
+                color: pp.project.color,
+                status: latestStatus as ProjectStatusType,
+                taskCount: pp.project._count?.tasks || 0,
+              };
+            });
 
-          return (
-            <div
-              key={portfolio.id}
-              className="rounded-xl border border-gray-200 bg-white shadow-sm"
-            >
-              {/* Portfolio header */}
-              <div className="flex items-center gap-4 border-b border-gray-100 px-6 py-4">
-                <div
-                  className="h-4 w-4 rounded"
-                  style={{ backgroundColor: portfolio.color }}
-                />
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-base font-semibold text-gray-900">
-                    {portfolio.name}
-                  </h2>
-                  {portfolio.description && (
-                    <p className="text-xs text-gray-500">
-                      {portfolio.description}
-                    </p>
-                  )}
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium text-gray-900">
-                    {avgProgress}%
-                  </p>
-                  <p className="text-xs text-gray-500">avg progress</p>
-                </div>
-                <div className="h-2 w-24 rounded-full bg-gray-100">
+            return (
+              <div
+                key={portfolio.id}
+                className="rounded-xl border border-gray-200 bg-white shadow-sm"
+              >
+                {/* Portfolio header */}
+                <div className="flex items-center gap-4 border-b border-gray-100 px-6 py-4">
                   <div
-                    className="h-2 rounded-full bg-indigo-600 transition-all"
-                    style={{ width: `${avgProgress}%` }}
+                    className="h-4 w-4 rounded"
+                    style={{ backgroundColor: portfolio.color }}
                   />
+                  <div className="min-w-0 flex-1">
+                    <h2 className="text-base font-semibold text-gray-900">
+                      {portfolio.name}
+                    </h2>
+                    {portfolio.description && (
+                      <p className="text-xs text-gray-500">
+                        {portfolio.description}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-gray-900">
+                      {projects.length} project{projects.length !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Projects within portfolio */}
+                {projects.length > 0 ? (
+                  <div className="divide-y divide-gray-50">
+                    {projects.map((project) => (
+                      <div
+                        key={project.id}
+                        className="flex items-center gap-4 px-6 py-3 hover:bg-gray-50"
+                      >
+                        <div
+                          className="h-2.5 w-2.5 rounded"
+                          style={{ backgroundColor: project.color }}
+                        />
+                        <span className="flex-1 text-sm font-medium text-gray-900">
+                          {project.name}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`h-2 w-2 rounded-full ${statusDot[project.status] || "bg-gray-400"}`}
+                          />
+                          <span className="text-xs capitalize text-gray-500">
+                            {project.status.replace("_", " ")}
+                          </span>
+                        </div>
+                        <span className="text-xs text-gray-500">
+                          {project.taskCount} tasks
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-6 py-4 text-center text-xs text-gray-400">
+                    No projects in this portfolio yet.
+                  </div>
+                )}
+
+                {/* Footer */}
+                <div className="flex items-center justify-between border-t border-gray-100 px-6 py-3">
+                  <span className="text-xs text-gray-400">
+                    Owner: {portfolio.owner?.name || "Unknown"}
+                  </span>
                 </div>
               </div>
+            );
+          })}
+        </div>
+      )}
 
-              {/* Projects within portfolio */}
-              <div className="divide-y divide-gray-50">
-                {portfolio.projects.map((project, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-4 px-6 py-3 hover:bg-gray-50"
-                  >
-                    <div
-                      className="h-2.5 w-2.5 rounded"
-                      style={{ backgroundColor: project.color }}
-                    />
-                    <span className="flex-1 text-sm font-medium text-gray-900">
-                      {project.name}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`h-2 w-2 rounded-full ${statusDot[project.status]}`}
-                      />
-                      <span className="text-xs capitalize text-gray-500">
-                        {project.status.replace("_", " ")}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="h-1.5 w-20 rounded-full bg-gray-100">
-                        <div
-                          className="h-1.5 rounded-full transition-all"
-                          style={{
-                            width: `${project.progress}%`,
-                            backgroundColor: project.color,
-                          }}
-                        />
-                      </div>
-                      <span className="w-8 text-right text-xs text-gray-500">
-                        {project.progress}%
-                      </span>
-                    </div>
-                  </div>
-                ))}
+      {/* Create portfolio modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h2 className="mb-4 text-lg font-semibold text-gray-900">Create Portfolio</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Name</label>
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="e.g. Product Development"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                />
               </div>
-
-              {/* Footer */}
-              <div className="flex items-center justify-between border-t border-gray-100 px-6 py-3">
-                <span className="text-xs text-gray-400">
-                  {portfolio.projects.length} project{portfolio.projects.length !== 1 ? "s" : ""}
-                </span>
-                <span className="text-xs text-gray-400">
-                  {portfolio.memberIds.length} member{portfolio.memberIds.length !== 1 ? "s" : ""}
-                </span>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Description</label>
+                <textarea
+                  rows={3}
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  placeholder="What is this portfolio for?"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Color</label>
+                <input
+                  type="color"
+                  value={newColor}
+                  onChange={(e) => setNewColor(e.target.value)}
+                  className="h-8 w-16 cursor-pointer rounded border border-gray-200"
+                />
               </div>
             </div>
-          );
-        })}
-      </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreate}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

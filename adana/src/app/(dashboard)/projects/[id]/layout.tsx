@@ -1,26 +1,4 @@
 import { getProject } from "@/app/actions/project-actions";
-import type { Project } from "@/types";
-
-const mockProject: Project = {
-  id: "p1",
-  name: "Website Redesign",
-  description: "Redesign the marketing website",
-  color: "#4f46e5",
-  icon: null,
-  ownerId: "demo-user",
-  teamId: "team-1",
-  privacy: "public",
-  defaultView: "board",
-  status: "on_track",
-  statusText: "Going well",
-  startDate: null,
-  dueDate: null,
-  archived: false,
-  memberIds: ["demo-user"],
-  sectionIds: [],
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-};
 
 export default async function ProjectLayout({
   children,
@@ -31,12 +9,22 @@ export default async function ProjectLayout({
 }) {
   const { id } = await params;
 
-  let project: Project = { ...mockProject, id };
+  let projectName = "Project";
+  let projectColor = "#4f46e5";
+  let projectStatusText: string | null = null;
+
   try {
-    const fetched = await getProject(id);
-    if (fetched) project = fetched;
+    const project = await getProject(id);
+    if (project) {
+      projectName = project.name;
+      projectColor = project.color;
+      // Derive status text from latest status update or project description
+      if (project.statuses && project.statuses.length > 0 && project.statuses[0].text) {
+        projectStatusText = project.statuses[0].text;
+      }
+    }
   } catch {
-    // use mock
+    // use defaults
   }
 
   return (
@@ -45,12 +33,12 @@ export default async function ProjectLayout({
       <div className="flex items-center gap-2 border-b border-gray-200 bg-white px-6 py-3">
         <div
           className="h-3 w-3 rounded"
-          style={{ backgroundColor: project.color }}
+          style={{ backgroundColor: projectColor }}
         />
-        <h2 className="text-sm font-semibold text-gray-900">{project.name}</h2>
-        {project.statusText && (
+        <h2 className="text-sm font-semibold text-gray-900">{projectName}</h2>
+        {projectStatusText && (
           <span className="ml-2 text-xs text-gray-500">
-            — {project.statusText}
+            &mdash; {projectStatusText}
           </span>
         )}
       </div>

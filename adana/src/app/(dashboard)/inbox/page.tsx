@@ -1,121 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import type { Notification, NotificationType } from "@/types";
-
-// -- Mock data ----------------------------------------------------------------
-
-const mockNotifications: Notification[] = [
-  {
-    id: "n1",
-    userId: "demo-user",
-    type: "task_assigned",
-    title: "New task assigned",
-    message: 'Sarah assigned you "Design homepage wireframes"',
-    read: false,
-    taskId: "t1",
-    projectId: "p1",
-    actorId: "user-2",
-    createdAt: new Date(Date.now() - 1800000).toISOString(),
-  },
-  {
-    id: "n2",
-    userId: "demo-user",
-    type: "comment_added",
-    title: "New comment",
-    message: 'Alex commented on "API Integration": "Looks good, but we need to handle edge cases."',
-    read: false,
-    taskId: "t2",
-    projectId: "p2",
-    actorId: "user-3",
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-  },
-  {
-    id: "n3",
-    userId: "demo-user",
-    type: "task_completed",
-    title: "Task completed",
-    message: 'Jordan completed "Set up staging environment"',
-    read: true,
-    taskId: "t3",
-    projectId: "p1",
-    actorId: "user-4",
-    createdAt: new Date(Date.now() - 7200000).toISOString(),
-  },
-  {
-    id: "n4",
-    userId: "demo-user",
-    type: "due_date_approaching",
-    title: "Due date approaching",
-    message: '"Write API documentation" is due tomorrow',
-    read: false,
-    taskId: "t3",
-    projectId: "p1",
-    actorId: null,
-    createdAt: new Date(Date.now() - 14400000).toISOString(),
-  },
-  {
-    id: "n5",
-    userId: "demo-user",
-    type: "project_status_update",
-    title: "Project update",
-    message: 'Taylor updated "Mobile App v2" status to At Risk',
-    read: true,
-    taskId: null,
-    projectId: "p2",
-    actorId: "user-5",
-    createdAt: new Date(Date.now() - 28800000).toISOString(),
-  },
-  {
-    id: "n6",
-    userId: "demo-user",
-    type: "mention",
-    title: "You were mentioned",
-    message: 'Alex mentioned you in "Sprint Planning Notes"',
-    read: true,
-    taskId: "t4",
-    projectId: "p1",
-    actorId: "user-3",
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-  },
-  {
-    id: "n7",
-    userId: "demo-user",
-    type: "approval_request",
-    title: "Approval requested",
-    message: 'Jordan requested your approval on "Deploy to production"',
-    read: false,
-    taskId: "t5",
-    projectId: "p2",
-    actorId: "user-4",
-    createdAt: new Date(Date.now() - 43200000).toISOString(),
-  },
-];
+import type { Notification } from "@/types";
 
 // -- Helpers ------------------------------------------------------------------
-
-const typeIcon: Record<NotificationType, string> = {
-  task_assigned: "bg-blue-100 text-blue-600",
-  task_completed: "bg-green-100 text-green-600",
-  comment_added: "bg-purple-100 text-purple-600",
-  due_date_approaching: "bg-orange-100 text-orange-600",
-  project_status_update: "bg-indigo-100 text-indigo-600",
-  mention: "bg-yellow-100 text-yellow-600",
-  approval_request: "bg-pink-100 text-pink-600",
-  approval_response: "bg-teal-100 text-teal-600",
-};
-
-const typeLabel: Record<NotificationType, string> = {
-  task_assigned: "Assigned",
-  task_completed: "Completed",
-  comment_added: "Comment",
-  due_date_approaching: "Due Soon",
-  project_status_update: "Status",
-  mention: "Mention",
-  approval_request: "Approval",
-  approval_response: "Approval",
-};
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -127,65 +16,131 @@ function timeAgo(iso: string) {
   return `${days}d ago`;
 }
 
-type FilterKey = "all" | NotificationType;
+const typeIcon: Record<string, string> = {
+  task_assigned: "bg-blue-100 text-blue-600",
+  assigned: "bg-blue-100 text-blue-600",
+  task_completed: "bg-green-100 text-green-600",
+  completed: "bg-green-100 text-green-600",
+  comment_added: "bg-purple-100 text-purple-600",
+  commented: "bg-purple-100 text-purple-600",
+  due_date_approaching: "bg-orange-100 text-orange-600",
+  project_status_update: "bg-indigo-100 text-indigo-600",
+  mention: "bg-yellow-100 text-yellow-600",
+  mentioned: "bg-yellow-100 text-yellow-600",
+  approval_request: "bg-pink-100 text-pink-600",
+  approval_response: "bg-teal-100 text-teal-600",
+  dependency_resolved: "bg-green-100 text-green-600",
+};
+
+const typeLabel: Record<string, string> = {
+  task_assigned: "Assigned",
+  assigned: "Assigned",
+  task_completed: "Completed",
+  completed: "Completed",
+  comment_added: "Comment",
+  commented: "Comment",
+  due_date_approaching: "Due Soon",
+  project_status_update: "Status",
+  mention: "Mention",
+  mentioned: "Mention",
+  approval_request: "Approval",
+  approval_response: "Approval",
+  dependency_resolved: "Resolved",
+};
+
+type FilterKey = "all" | string;
 
 // -- Component ----------------------------------------------------------------
 
 export default function InboxPage() {
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<FilterKey>("all");
-  const [showArchived, setShowArchived] = useState(false);
-  const [archivedIds, setArchivedIds] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      const { getNotifications } = await import("@/app/actions/notification-actions");
+      const fetched = await getNotifications();
+      if (fetched) setNotifications(fetched as Notification[]);
+    } catch {
+      // keep empty
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    async function load() {
-      try {
-        const { getNotifications } = await import("@/app/actions/notification-actions");
-        const fetched = await getNotifications();
-        if (fetched?.length) setNotifications(fetched);
-      } catch {
-        // keep mock data
-      }
-    }
-    load();
-  }, []);
+    loadNotifications();
+  }, [loadNotifications]);
 
   const filters: { key: FilterKey; label: string }[] = [
     { key: "all", label: "All" },
-    { key: "task_assigned", label: "Assigned" },
-    { key: "comment_added", label: "Comments" },
-    { key: "task_completed", label: "Completed" },
-    { key: "due_date_approaching", label: "Due Soon" },
-    { key: "mention", label: "Mentions" },
-    { key: "approval_request", label: "Approvals" },
+    { key: "assigned", label: "Assigned" },
+    { key: "commented", label: "Comments" },
+    { key: "completed", label: "Completed" },
+    { key: "mentioned", label: "Mentions" },
   ];
 
   const visible = notifications.filter((n) => {
-    if (!showArchived && archivedIds.has(n.id)) return false;
+    if (n.archived) return false;
     if (filter !== "all" && n.type !== filter) return false;
     return true;
   });
 
-  const unreadCount = notifications.filter((n) => !n.read && !archivedIds.has(n.id)).length;
+  const unreadCount = notifications.filter((n) => !n.read && !n.archived).length;
 
-  function toggleRead(id: string) {
+  async function toggleRead(id: string) {
+    // Optimistic update
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: !n.read } : n))
     );
+    try {
+      const { markAsRead } = await import("@/app/actions/notification-actions");
+      await markAsRead(id);
+    } catch {
+      // revert on error
+      loadNotifications();
+    }
   }
 
-  function markAllRead() {
+  async function markAllRead() {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    try {
+      const { markAllAsRead } = await import("@/app/actions/notification-actions");
+      await markAllAsRead();
+    } catch {
+      loadNotifications();
+    }
   }
 
-  function archive(id: string) {
-    setArchivedIds((prev) => new Set([...prev, id]));
+  async function archive(id: string) {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, archived: true } : n))
+    );
+    try {
+      const { archiveNotification } = await import("@/app/actions/notification-actions");
+      await archiveNotification(id);
+    } catch {
+      loadNotifications();
+    }
   }
 
   function getLinkHref(n: Notification) {
-    if (n.taskId && n.projectId) return `/projects/${n.projectId}/list`;
-    if (n.projectId) return `/projects/${n.projectId}/overview`;
+    if (n.linkUrl) return n.linkUrl;
     return "/inbox";
+  }
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-3xl p-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Inbox</h1>
+        <div className="animate-pulse space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-16 rounded-lg bg-gray-100" />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -206,16 +161,6 @@ export default function InboxPage() {
             className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
           >
             Mark all read
-          </button>
-          <button
-            onClick={() => setShowArchived(!showArchived)}
-            className={`rounded-lg border px-3 py-1.5 text-sm ${
-              showArchived
-                ? "border-indigo-200 bg-indigo-50 text-indigo-600"
-                : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            {showArchived ? "Hide archived" : "Show archived"}
           </button>
         </div>
       </div>
@@ -263,19 +208,21 @@ export default function InboxPage() {
                 key={n.id}
                 className={`group flex items-start gap-3 px-5 py-4 transition ${
                   !n.read ? "bg-indigo-50/40" : "hover:bg-gray-50"
-                } ${archivedIds.has(n.id) ? "opacity-50" : ""}`}
+                }`}
               >
                 {/* Icon */}
                 <div
-                  className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${typeIcon[n.type]}`}
+                  className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${typeIcon[n.type] || "bg-gray-100 text-gray-600"}`}
                 >
-                  {typeLabel[n.type][0]}
+                  {(typeLabel[n.type] || n.type)?.[0]?.toUpperCase() || "N"}
                 </div>
 
                 {/* Content */}
                 <Link href={getLinkHref(n)} className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-gray-900">{n.title}</p>
-                  <p className="mt-0.5 text-sm text-gray-600">{n.message}</p>
+                  {n.message && (
+                    <p className="mt-0.5 text-sm text-gray-600">{n.message}</p>
+                  )}
                   <p className="mt-1 text-xs text-gray-400">{timeAgo(n.createdAt)}</p>
                 </Link>
 
@@ -290,22 +237,20 @@ export default function InboxPage() {
                       <circle cx="12" cy="12" r="3" />
                     </svg>
                   </button>
-                  {!archivedIds.has(n.id) && (
-                    <button
-                      onClick={() => archive(n.id)}
-                      title="Archive"
-                      className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                    >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
-                        />
-                      </svg>
-                    </button>
-                  )}
+                  <button
+                    onClick={() => archive(n.id)}
+                    title="Archive"
+                    className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
+                      />
+                    </svg>
+                  </button>
                 </div>
 
                 {/* Unread dot */}

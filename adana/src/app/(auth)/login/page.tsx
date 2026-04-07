@@ -18,8 +18,12 @@ export default function LoginPage() {
 
     try {
       const { login } = await import("@/app/actions/auth-actions");
-      await login(email, password);
-      window.location.href = "/home";
+      const result = await login(email, password);
+      if (result?.error) {
+        setError(result.error);
+      } else {
+        window.location.href = "/home";
+      }
     } catch {
       setError("Invalid email or password. Please try again.");
     } finally {

@@ -47,7 +47,19 @@ export default async function HomePage() {
       getProjects(),
     ]);
     if (fetchedUser) user = fetchedUser as typeof user;
-    if (Array.isArray(fetchedTasks) && fetchedTasks.length) tasks = fetchedTasks;
+    if (fetchedTasks) {
+      // getMyTasks returns { today, upcoming, later } – flatten into a single array
+      if (Array.isArray(fetchedTasks)) {
+        tasks = fetchedTasks;
+      } else if (typeof fetchedTasks === "object" && fetchedTasks !== null) {
+        const grouped = fetchedTasks as { today?: unknown[]; upcoming?: unknown[]; later?: unknown[] };
+        tasks = [
+          ...(grouped.today || []),
+          ...(grouped.upcoming || []),
+          ...(grouped.later || []),
+        ];
+      }
+    }
     if (Array.isArray(fetchedProjects) && fetchedProjects.length) projects = fetchedProjects;
   } catch {
     // Use defaults

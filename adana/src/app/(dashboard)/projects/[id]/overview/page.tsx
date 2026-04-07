@@ -1,58 +1,7 @@
 import { getProject } from "@/app/actions/project-actions";
-import type { Project, ProjectStatusType } from "@/types";
+import { getTasks } from "@/app/actions/task-actions";
+import type { ProjectStatusType } from "@/types";
 import Link from "next/link";
-
-// -- Mock data ----------------------------------------------------------------
-
-const mockProject: Project = {
-  id: "p1",
-  name: "Website Redesign",
-  description: "Redesign the marketing website with new branding, improved UX, and modern tech stack. The goal is to increase conversion rates by 25% and reduce bounce rate.",
-  color: "#4f46e5",
-  icon: null,
-  ownerId: "demo-user",
-  teamId: "team-1",
-  privacy: "public",
-  defaultView: "board",
-  status: "on_track",
-  statusText: "Going well, on track for Q2 delivery",
-  startDate: new Date(Date.now() - 2592000000).toISOString(),
-  dueDate: new Date(Date.now() + 5184000000).toISOString(),
-  archived: false,
-  memberIds: ["demo-user", "user-2", "user-3", "user-4"],
-  sectionIds: ["s1", "s2", "s3"],
-  createdAt: new Date(Date.now() - 2592000000).toISOString(),
-  updatedAt: new Date().toISOString(),
-};
-
-const mockStats = {
-  totalTasks: 24,
-  completedTasks: 15,
-  overdueTasks: 2,
-  milestonesCompleted: 3,
-  milestonesTotal: 5,
-};
-
-const mockMembers = [
-  { id: "demo-user", name: "Demo User", role: "Owner", initial: "D" },
-  { id: "user-2", name: "Sarah Chen", role: "Designer", initial: "S" },
-  { id: "user-3", name: "Alex Kim", role: "Developer", initial: "A" },
-  { id: "user-4", name: "Jordan Lee", role: "QA Lead", initial: "J" },
-];
-
-const mockStatusUpdates = [
-  { id: "su1", text: "Completed design system components. Moving to page implementation.", date: "Mar 28", author: "Sarah Chen" },
-  { id: "su2", text: "API layer is 80% done. Auth and task endpoints ready.", date: "Mar 22", author: "Alex Kim" },
-  { id: "su3", text: "Project kickoff. Requirements finalized.", date: "Mar 10", author: "Demo User" },
-];
-
-const mockMilestones = [
-  { id: "m1", name: "Design Approval", completed: true, date: "Mar 15" },
-  { id: "m2", name: "API MVP", completed: true, date: "Mar 22" },
-  { id: "m3", name: "Frontend Alpha", completed: true, date: "Mar 30" },
-  { id: "m4", name: "QA Complete", completed: false, date: "Apr 15" },
-  { id: "m5", name: "Launch", completed: false, date: "Apr 30" },
-];
 
 // -- Helpers ------------------------------------------------------------------
 
@@ -109,17 +58,52 @@ export default async function ProjectOverviewPage({
 }) {
   const { id } = await params;
 
-  let project: Project = { ...mockProject, id };
-  try {
-    const fetched = await getProject(id);
-    if (fetched) project = fetched;
-  } catch {
-    // use mock
+  const [project, allTasks] = await Promise.all([
+    getProject(id),
+    getTasks(id),
+  ]);
+
+  if (!project) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-sm text-gray-500">Project not found.</p>
+      </div>
+    );
   }
 
-  const progress = Math.round(
-    (mockStats.completedTasks / mockStats.totalTasks) * 100
-  );
+  // Compute real stats
+  const totalTasks = allTasks.length;
+  const completedTasks = allTasks.filter((t: { completed: boolean }) => t.completed).length;
+  const overdueTasks = allTasks.filter((t: { completed: boolean; dueDate?: string | null }) => {
+    if (t.completed || !t.dueDate) return false;
+    return new Date(t.dueDate) < new Date();
+  }).length;
+  const milestoneTasks = allTasks.filter((t: { taskType: string }) => t.taskType === "milestone");
+  const milestonesCompleted = milestoneTasks.filter((t: { completed: boolean }) => t.completed).length;
+  const milestonesTotal = milestoneTasks.length;
+
+  const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  // Real members from project.members
+  const members = (project.members ?? []).map((m: { id: string; role: string; user?: { id: string; name: string; email: string; avatar?: string | null } }) => ({
+    id: m.user?.id ?? m.id,
+    name: m.user?.name ?? "Unknown",
+    role: m.role,
+    initial: (m.user?.name ?? "?")[0],
+  }));
+
+  // Real status updates from project.statuses
+  const statusUpdates = (project.statuses ?? []).map((s: { id: string; text?: string | null; createdAt: string | Date; status: string; author?: { id: string; name: string; avatar?: string | null } }) => ({
+    id: s.id,
+    text: s.text ?? `Status: ${s.status}`,
+    date: new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    author: s.author?.name ?? "Unknown",
+  }));
+
+  // Derive project status from latest status update or default
+  const latestStatus = project.statuses && project.statuses.length > 0
+    ? (project.statuses[0].status as ProjectStatusType)
+    : "on_track";
 
   return (
     <div className="flex h-full flex-col">
@@ -140,19 +124,14 @@ export default async function ProjectOverviewPage({
                     {project.name}
                   </h1>
                   <span
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColor[project.status]}`}
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColor[latestStatus] ?? "bg-gray-100 text-gray-700"}`}
                   >
-                    {statusLabel[project.status]}
+                    {statusLabel[latestStatus] ?? "On Track"}
                   </span>
                 </div>
                 {project.description && (
                   <p className="mt-2 text-sm text-gray-600">
                     {project.description}
-                  </p>
-                )}
-                {project.statusText && (
-                  <p className="mt-2 text-sm italic text-gray-500">
-                    {project.statusText}
                   </p>
                 )}
               </div>
@@ -164,19 +143,19 @@ export default async function ProjectOverviewPage({
             <div className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
               <p className="text-sm text-gray-500">Total Tasks</p>
               <p className="mt-1 text-2xl font-bold text-gray-900">
-                {mockStats.totalTasks}
+                {totalTasks}
               </p>
             </div>
             <div className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
               <p className="text-sm text-gray-500">Completed</p>
               <p className="mt-1 text-2xl font-bold text-green-600">
-                {mockStats.completedTasks}
+                {completedTasks}
               </p>
             </div>
             <div className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
               <p className="text-sm text-gray-500">Overdue</p>
               <p className="mt-1 text-2xl font-bold text-red-600">
-                {mockStats.overdueTasks}
+                {overdueTasks}
               </p>
             </div>
             <div className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
@@ -206,60 +185,76 @@ export default async function ProjectOverviewPage({
             <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
               <div className="border-b border-gray-100 px-5 py-4">
                 <h3 className="text-sm font-semibold text-gray-900">
-                  Milestones ({mockStats.milestonesCompleted}/{mockStats.milestonesTotal})
+                  Milestones ({milestonesCompleted}/{milestonesTotal})
                 </h3>
               </div>
-              <ul className="divide-y divide-gray-100">
-                {mockMilestones.map((m) => (
-                  <li key={m.id} className="flex items-center gap-3 px-5 py-3">
-                    <div
-                      className={`flex h-5 w-5 items-center justify-center rounded-full ${
-                        m.completed
-                          ? "bg-green-500 text-white"
-                          : "border-2 border-gray-300"
-                      }`}
-                    >
-                      {m.completed && (
-                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
+              {milestonesTotal === 0 ? (
+                <div className="px-5 py-4 text-sm text-gray-400">
+                  No milestones yet.
+                </div>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {milestoneTasks.map((m: { id: string; title: string; completed: boolean; dueDate?: string | null }) => (
+                    <li key={m.id} className="flex items-center gap-3 px-5 py-3">
+                      <div
+                        className={`flex h-5 w-5 items-center justify-center rounded-full ${
+                          m.completed
+                            ? "bg-green-500 text-white"
+                            : "border-2 border-gray-300"
+                        }`}
+                      >
+                        {m.completed && (
+                          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                      <span
+                        className={`flex-1 text-sm ${
+                          m.completed ? "text-gray-400 line-through" : "font-medium text-gray-900"
+                        }`}
+                      >
+                        {m.title}
+                      </span>
+                      {m.dueDate && (
+                        <span className="text-xs text-gray-500">
+                          {new Date(m.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        </span>
                       )}
-                    </div>
-                    <span
-                      className={`flex-1 text-sm ${
-                        m.completed ? "text-gray-400 line-through" : "font-medium text-gray-900"
-                      }`}
-                    >
-                      {m.name}
-                    </span>
-                    <span className="text-xs text-gray-500">{m.date}</span>
-                  </li>
-                ))}
-              </ul>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             {/* Team Members */}
             <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
               <div className="border-b border-gray-100 px-5 py-4">
                 <h3 className="text-sm font-semibold text-gray-900">
-                  Team ({mockMembers.length})
+                  Team ({members.length})
                 </h3>
               </div>
-              <ul className="divide-y divide-gray-100">
-                {mockMembers.map((member) => (
-                  <li key={member.id} className="flex items-center gap-3 px-5 py-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-sm font-medium text-indigo-600">
-                      {member.initial}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-gray-900">
-                        {member.name}
-                      </p>
-                      <p className="text-xs text-gray-500">{member.role}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              {members.length === 0 ? (
+                <div className="px-5 py-4 text-sm text-gray-400">
+                  No members yet.
+                </div>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {members.map((member: { id: string; name: string; role: string; initial: string }) => (
+                    <li key={member.id} className="flex items-center gap-3 px-5 py-3">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-sm font-medium text-indigo-600">
+                        {member.initial}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-gray-900">
+                          {member.name}
+                        </p>
+                        <p className="text-xs capitalize text-gray-500">{member.role}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
 
@@ -270,20 +265,26 @@ export default async function ProjectOverviewPage({
                 Status Updates
               </h3>
             </div>
-            <div className="divide-y divide-gray-100">
-              {mockStatusUpdates.map((update) => (
-                <div key={update.id} className="px-5 py-4">
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <span className="font-medium text-gray-700">
-                      {update.author}
-                    </span>
-                    <span>&middot;</span>
-                    <span>{update.date}</span>
+            {statusUpdates.length === 0 ? (
+              <div className="px-5 py-4 text-sm text-gray-400">
+                No status updates yet.
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {statusUpdates.map((update: { id: string; text: string; date: string; author: string }) => (
+                  <div key={update.id} className="px-5 py-4">
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <span className="font-medium text-gray-700">
+                        {update.author}
+                      </span>
+                      <span>&middot;</span>
+                      <span>{update.date}</span>
+                    </div>
+                    <p className="mt-1 text-sm text-gray-700">{update.text}</p>
                   </div>
-                  <p className="mt-1 text-sm text-gray-700">{update.text}</p>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

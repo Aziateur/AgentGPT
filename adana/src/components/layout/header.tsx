@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Search,
@@ -35,6 +36,32 @@ const viewOptions: { type: ProjectView; icon: React.ReactNode; label: string }[]
 // Header component
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Breadcrumb label from pathname
+// ---------------------------------------------------------------------------
+
+function getBreadcrumbLabel(pathname: string): string {
+  if (pathname === "/" || pathname === "/home") return "Home";
+  if (pathname === "/my-tasks") return "My Tasks";
+  if (pathname === "/inbox") return "Inbox";
+  if (pathname === "/portfolios") return "Portfolios";
+  if (pathname === "/goals") return "Goals";
+  if (pathname === "/reporting") return "Reporting";
+  if (pathname === "/search") return "Search";
+  if (pathname === "/teams") return "Teams";
+  if (pathname === "/projects" && !pathname.includes("/projects/")) return "Projects";
+
+  // Project sub-pages: /projects/xxx/list -> "List"
+  const projectViewMatch = pathname.match(/\/projects\/[^/]+\/(list|board|timeline|calendar|overview)/);
+  if (projectViewMatch) {
+    return projectViewMatch[1].charAt(0).toUpperCase() + projectViewMatch[1].slice(1);
+  }
+
+  if (pathname.startsWith("/projects/")) return "Project";
+  if (pathname.startsWith("/teams/")) return "Team";
+  return "Page";
+}
+
 export function Header() {
   const {
     currentUser,
@@ -46,8 +73,18 @@ export function Header() {
     setProjectView,
   } = useAppStore();
 
+  const pathname = usePathname();
+  const router = useRouter();
+
   const [searchFocused, setSearchFocused] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+
+  // Determine if we're on a project page for the view switcher
+  const projectMatch = pathname.match(/\/projects\/([^/]+)/);
+  const isProjectPage = !!projectMatch;
+  const projectId = projectMatch?.[1];
+
+  const breadcrumbLabel = getBreadcrumbLabel(pathname);
 
   const userInitials = currentUser
     ? currentUser.name
@@ -65,7 +102,7 @@ export function Header() {
           My Workspace
         </span>
         <ChevronRight className="h-3.5 w-3.5 text-gray-400" />
-        <span className="text-gray-500 dark:text-gray-400">Projects</span>
+        <span className="text-gray-500 dark:text-gray-400">{breadcrumbLabel}</span>
       </div>
 
       {/* Center: Global search bar ---------------------------------------- */}
@@ -83,6 +120,11 @@ export function Header() {
             onChange={(e) => setSearchQuery(e.target.value)}
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setSearchFocused(false)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && searchQuery.trim()) {
+                router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+              }
+            }}
             className={cn(
               "h-9 w-full rounded-lg border bg-gray-50 pl-9 pr-3 text-sm outline-none transition-colors",
               "placeholder:text-gray-400",
@@ -99,13 +141,24 @@ export function Header() {
       <div className="flex items-center gap-2">
         {/* View switcher */}
         <div className="flex items-center rounded-lg border border-gray-200 p-0.5 dark:border-gray-600">
-          {viewOptions.map((view) => (
+          {viewOptions.map((view) => {
+            // Determine if this view is active based on actual URL when on a project page
+            const isActive = isProjectPage
+              ? pathname.endsWith(`/${view.type}`)
+              : selectedProjectView === view.type;
+
+            return (
             <button
               key={view.type}
-              onClick={() => setProjectView(view.type)}
+              onClick={() => {
+                setProjectView(view.type);
+                if (isProjectPage && projectId) {
+                  router.push(`/projects/${projectId}/${view.type}`);
+                }
+              }}
               className={cn(
                 "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
-                selectedProjectView === view.type
+                isActive
                   ? "bg-adana-50 text-adana-700 dark:bg-adana-900/30 dark:text-adana-300"
                   : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
               )}
@@ -114,11 +167,15 @@ export function Header() {
               {view.icon}
               <span className="hidden lg:inline">{view.label}</span>
             </button>
-          ))}
+            );
+          })}
         </div>
 
         {/* Create button */}
-        <button className="flex h-8 items-center gap-1.5 rounded-lg bg-adana-600 px-3 text-sm font-medium text-white transition-colors hover:bg-adana-700">
+        <button
+          onClick={() => router.push("/my-tasks")}
+          className="flex h-8 items-center gap-1.5 rounded-lg bg-adana-600 px-3 text-sm font-medium text-white transition-colors hover:bg-adana-700"
+        >
           <Plus className="h-4 w-4" />
           <span className="hidden sm:inline">Create</span>
         </button>
@@ -143,9 +200,9 @@ export function Header() {
             className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-adana-600 text-xs font-semibold text-white transition-opacity hover:opacity-90"
             aria-label="User menu"
           >
-            {currentUser?.avatarUrl ? (
+            {currentUser?.avatar ? (
               <img
-                src={currentUser.avatarUrl}
+                src={currentUser.avatar}
                 alt={currentUser.name}
                 className="h-full w-full object-cover"
               />
