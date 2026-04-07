@@ -1,5 +1,5 @@
 {
-  "installCommand": "cd adana && npm install",
+  "installCommand": "npm install && cd adana && npm install",
   "buildCommand": "cd adana && npx prisma generate && npm run build",
   "outputDirectory": "adana/.next",
   "framework": "nextjs"
