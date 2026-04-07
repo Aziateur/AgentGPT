@@ -1,0 +1,6 @@
+{
+  "buildCommand": "cd adana && npm install && npx prisma generate && npm run build",
+  "outputDirectory": "adana/.next",
+  "framework": "nextjs",
+  "installCommand": "echo 'skip root install'"
+}
