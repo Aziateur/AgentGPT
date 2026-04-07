@@ -1,6 +1,6 @@
 {
   "installCommand": "npm install && cd adana && npm install",
-  "buildCommand": "cd adana && npx prisma generate && npm run build",
+  "buildCommand": "cd adana && DATABASE_URL=file:./prisma/dev.db npx prisma db push --accept-data-loss && DATABASE_URL=file:./prisma/dev.db npx tsx prisma/seed.ts && DATABASE_URL=file:./prisma/dev.db npm run build",
   "outputDirectory": "adana/.next",
   "framework": "nextjs"
 }
