@@ -79,12 +79,11 @@ export function TaskRow({
   onClick,
   className,
 }: TaskRowProps) {
+  const taskName = task.title || (task as Record<string, unknown>).name as string || "";
   const [isEditing, setIsEditing] = React.useState(false);
-  const [editValue, setEditValue] = React.useState(task.name);
+  const [editValue, setEditValue] = React.useState(taskName);
   const [justCompleted, setJustCompleted] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
-
-  const taskName = task.title || (task as Record<string, unknown>).name as string || "";
 
   // Sync external name changes
   React.useEffect(() => {
