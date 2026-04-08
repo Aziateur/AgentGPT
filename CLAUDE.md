@@ -308,7 +308,11 @@ Source: recherche exhaustive sur asana.com (avril 2026)
 ---
 
 ## DEPLOYMENT
-- ALWAYS push to production.
-- Cloudflare Pages is configured with `gh-pages` as the Production branch while `main` is just Preview. 
-- Therefore, whenever updates are made to the code, you MUST push your changes to that branch specifically using: `git push origin main:gh-pages`
-- Do not leave changes unpushed!
+- ALWAYS deploy to production after making changes.
+- Hosting: Cloudflare Pages (project name: `adana`, domain: `adana-aim.pages.dev`)
+- Cloudflare's git-based auto-build does NOT work because the app lives in the `adana/` subdirectory. You MUST deploy manually using wrangler CLI.
+- Deploy steps (run from repo root):
+  1. `cd adana && npx @cloudflare/next-on-pages` — builds the Next.js app for Cloudflare Workers
+  2. `cd adana && npx wrangler pages deploy .vercel/output/static --project-name adana --branch production` — deploys to production
+- Also commit and push source to GitHub: `git add . && git commit -m "..." && git push origin main`
+- Do not leave changes undeployed!
