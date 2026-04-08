@@ -1,18 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: "export",
   typescript: {
     ignoreBuildErrors: true,
   },
   eslint: {
     ignoreDuringBuilds: true,
   },
-  experimental: {
-    serverActions: {
-      bodySizeLimit: '10mb',
-    },
-    outputFileTracingIncludes: {
-      '/**': ['./prisma/dev.db'],
-    },
+  images: {
+    unoptimized: true,
   },
 };
 

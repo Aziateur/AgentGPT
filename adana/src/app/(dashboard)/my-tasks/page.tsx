@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useAppStore } from "@/store/app-store";
 import type { Task } from "@/types";
 
 // -- Helpers ------------------------------------------------------------------
@@ -29,35 +29,13 @@ type TabKey = "today" | "upcoming" | "later";
 // -- Component ----------------------------------------------------------------
 
 export default function MyTasksPage() {
-  const router = useRouter();
-  const [todayTasks, setTodayTasks] = useState<Task[]>([]);
-  const [upcomingTasks, setUpcomingTasks] = useState<Task[]>([]);
-  const [laterTasks, setLaterTasks] = useState<Task[]>([]);
+  const { getMyTasks, createTask, toggleTaskComplete, loading } = useAppStore();
   const [activeTab, setActiveTab] = useState<TabKey>("today");
   const [sortBy, setSortBy] = useState<"due_date" | "priority" | "title">("due_date");
   const [showAddTask, setShowAddTask] = useState(false);
   const [newTaskName, setNewTaskName] = useState("");
-  const [loading, setLoading] = useState(true);
 
-  const loadTasks = useCallback(async () => {
-    try {
-      const { getMyTasks } = await import("@/app/actions/task-actions");
-      const result = await getMyTasks();
-      if (result) {
-        setTodayTasks(result.today as Task[] || []);
-        setUpcomingTasks(result.upcoming as Task[] || []);
-        setLaterTasks(result.later as Task[] || []);
-      }
-    } catch {
-      // keep empty
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadTasks();
-  }, [loadTasks]);
+  const { today: todayTasks, upcoming: upcomingTasks, later: laterTasks } = getMyTasks();
 
   const categorized: Record<TabKey, Task[]> = {
     today: todayTasks,
@@ -88,27 +66,13 @@ export default function MyTasksPage() {
 
   async function handleAddTask() {
     if (!newTaskName.trim()) return;
-    try {
-      const { createTask } = await import("@/app/actions/task-actions");
-      const result = await createTask({ title: newTaskName.trim() });
-      if (result && !("error" in result)) {
-        setNewTaskName("");
-        setShowAddTask(false);
-        loadTasks();
-      }
-    } catch {
-      // ignore
-    }
+    await createTask({ title: newTaskName.trim() });
+    setNewTaskName("");
+    setShowAddTask(false);
   }
 
   async function handleToggleComplete(taskId: string) {
-    try {
-      const { toggleComplete } = await import("@/app/actions/task-actions");
-      await toggleComplete(taskId);
-      loadTasks();
-    } catch {
-      // ignore
-    }
+    await toggleTaskComplete(taskId);
   }
 
   if (loading) {
@@ -247,11 +211,6 @@ export default function MyTasksPage() {
                   >
                     {task.title}
                   </p>
-                  {(task as Record<string, unknown>).project && (
-                    <p className="text-xs text-gray-400">
-                      {((task as Record<string, unknown>).project as { name: string })?.name}
-                    </p>
-                  )}
                 </div>
                 {task.priority && task.priority !== "none" && (
                   <span

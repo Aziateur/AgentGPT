@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 
 // -- Types --------------------------------------------------------------------
 
@@ -11,13 +11,10 @@ interface GoalData {
   status: string;
   progress: number;
   period: string | null;
-  startDate: string | null;
-  endDate: string | null;
-  ownerId: string;
-  owner: { id: string; name: string; avatar: string | null };
   parentId: string | null;
+  ownerInitial: string;
+  ownerName: string;
   subGoals: GoalData[];
-  _count?: { projects: number; subGoals: number };
 }
 
 // -- Helpers ------------------------------------------------------------------
@@ -53,7 +50,6 @@ const statusProgressColor: Record<string, string> = {
 };
 
 type StatusFilterKey = "all" | string;
-type PeriodFilterKey = "all" | string;
 
 // -- Sub-components -----------------------------------------------------------
 
@@ -96,9 +92,7 @@ function GoalCard({
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-gray-900">
-                {goal.name}
-              </h3>
+              <h3 className="text-sm font-semibold text-gray-900">{goal.name}</h3>
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusColor[goal.status] || "bg-gray-100 text-gray-600"}`}>
                 {statusLabel[goal.status] || goal.status}
               </span>
@@ -120,18 +114,16 @@ function GoalCard({
                   style={{ width: `${progress}%` }}
                 />
               </div>
-              <span className="text-xs font-medium text-gray-600">
-                {progress}%
-              </span>
+              <span className="text-xs font-medium text-gray-600">{progress}%</span>
             </div>
 
             {/* Owner + actions */}
             <div className="mt-2 flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-200 text-[9px] font-medium text-gray-600">
-                  {goal.owner?.name?.[0] || "?"}
+                  {goal.ownerInitial}
                 </div>
-                <span className="text-xs text-gray-500">{goal.owner?.name || "Unknown"}</span>
+                <span className="text-xs text-gray-500">{goal.ownerName}</span>
               </div>
               <div className="flex items-center gap-1">
                 <select
@@ -180,7 +172,6 @@ function GoalCard({
 
 export default function GoalsPage() {
   const [goals, setGoals] = useState<GoalData[]>([]);
-  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilterKey>("all");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newName, setNewName] = useState("");
@@ -188,65 +179,50 @@ export default function GoalsPage() {
   const [newStatus, setNewStatus] = useState("on_track");
   const [newPeriod, setNewPeriod] = useState("");
 
-  const loadGoals = useCallback(async () => {
-    try {
-      const { getGoals } = await import("@/app/actions/goal-actions");
-      const data = await getGoals();
-      setGoals(data as GoalData[]);
-    } catch {
-      // keep empty
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadGoals();
-  }, [loadGoals]);
-
-  const handleCreate = async () => {
+  const handleCreate = () => {
     if (!newName.trim()) return;
-    const { createGoal } = await import("@/app/actions/goal-actions");
-    const result = await createGoal({
-      name: newName,
-      description: newDescription || undefined,
+    const newGoal: GoalData = {
+      id: `goal-${Date.now()}`,
+      name: newName.trim(),
+      description: newDescription.trim() || null,
       status: newStatus,
-      period: newPeriod || undefined,
-    });
-    if (!result.error) {
-      setNewName("");
-      setNewDescription("");
-      setNewStatus("on_track");
-      setNewPeriod("");
-      setShowCreateModal(false);
-      loadGoals();
-    }
+      progress: 0,
+      period: newPeriod.trim() || null,
+      parentId: null,
+      ownerInitial: "Y",
+      ownerName: "You",
+      subGoals: [],
+    };
+    setGoals((prev) => [newGoal, ...prev]);
+    setNewName("");
+    setNewDescription("");
+    setNewStatus("on_track");
+    setNewPeriod("");
+    setShowCreateModal(false);
   };
 
-  const handleDelete = async (id: string) => {
-    const { deleteGoal } = await import("@/app/actions/goal-actions");
-    await deleteGoal(id);
-    loadGoals();
+  const handleDelete = (id: string) => {
+    const removeGoal = (list: GoalData[]): GoalData[] =>
+      list
+        .filter((g) => g.id !== id)
+        .map((g) => ({ ...g, subGoals: removeGoal(g.subGoals) }));
+    setGoals((prev) => removeGoal(prev));
   };
 
-  const handleUpdateStatus = async (id: string, status: string) => {
-    const { updateGoal } = await import("@/app/actions/goal-actions");
-    await updateGoal(id, { status });
-    loadGoals();
+  const handleUpdateStatus = (id: string, status: string) => {
+    const updateGoal = (list: GoalData[]): GoalData[] =>
+      list.map((g) =>
+        g.id === id
+          ? { ...g, status }
+          : { ...g, subGoals: updateGoal(g.subGoals) }
+      );
+    setGoals((prev) => updateGoal(prev));
   };
 
   const filtered = goals.filter((g) => {
     if (statusFilter !== "all" && g.status !== statusFilter) return false;
     return true;
   });
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
-      </div>
-    );
-  }
 
   return (
     <div className="mx-auto max-w-4xl p-6">
@@ -287,10 +263,35 @@ export default function GoalsPage() {
       {/* Goals tree */}
       {filtered.length === 0 ? (
         <div className="rounded-xl border border-gray-200 bg-white px-6 py-16 text-center shadow-sm">
-          <p className="text-sm font-medium text-gray-900">No goals found</p>
-          <p className="mt-1 text-sm text-gray-500">
-            Try a different filter or create a new goal.
+          <svg
+            className="mx-auto mb-3 h-10 w-10 text-gray-300"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
+            />
+          </svg>
+          <p className="text-sm font-medium text-gray-900">
+            {goals.length === 0 ? "No goals yet" : "No goals match this filter"}
           </p>
+          <p className="mt-1 text-sm text-gray-500">
+            {goals.length === 0
+              ? "Create your first goal to start tracking OKRs."
+              : "Try a different filter or create a new goal."}
+          </p>
+          {goals.length === 0 && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              Create first goal
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-4">

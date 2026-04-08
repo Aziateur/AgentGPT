@@ -1,7 +1,7 @@
+"use client";
+
 import Link from "next/link";
-import { getCurrentUser } from "@/app/actions/auth-actions";
-import { getProjects } from "@/app/actions/project-actions";
-import { getMyTasks } from "@/app/actions/task-actions";
+import { useAppStore } from "@/store/app-store";
 
 // -- Helpers ---------------------------------------------------------------
 
@@ -9,14 +9,6 @@ const priorityColor: Record<string, string> = {
   high: "text-red-600 bg-red-50",
   medium: "text-yellow-600 bg-yellow-50",
   low: "text-blue-600 bg-blue-50",
-};
-
-const statusColor: Record<string, string> = {
-  on_track: "bg-green-500",
-  at_risk: "bg-yellow-500",
-  off_track: "bg-red-500",
-  on_hold: "bg-gray-400",
-  complete: "bg-blue-500",
 };
 
 function formatDate(iso: string) {
@@ -35,37 +27,22 @@ function getGreeting() {
 
 // -- Page ------------------------------------------------------------------
 
-export default async function HomePage() {
-  let user = { id: "demo", name: "Demo User", email: "demo@adana.dev" };
-  let tasks: Array<Record<string, unknown>> = [];
-  let projects: Array<Record<string, unknown>> = [];
+export default function HomePage() {
+  const { initialized, loading, currentUser, projects, tasks } = useAppStore();
 
-  try {
-    const [fetchedUser, fetchedTasks, fetchedProjects] = await Promise.all([
-      getCurrentUser(),
-      getMyTasks(),
-      getProjects(),
-    ]);
-    if (fetchedUser) user = fetchedUser as typeof user;
-    if (fetchedTasks) {
-      // getMyTasks returns { today, upcoming, later } – flatten into a single array
-      if (Array.isArray(fetchedTasks)) {
-        tasks = fetchedTasks;
-      } else if (typeof fetchedTasks === "object" && fetchedTasks !== null) {
-        const grouped = fetchedTasks as { today?: unknown[]; upcoming?: unknown[]; later?: unknown[] };
-        tasks = [
-          ...(grouped.today || []),
-          ...(grouped.upcoming || []),
-          ...(grouped.later || []),
-        ];
-      }
-    }
-    if (Array.isArray(fetchedProjects) && fetchedProjects.length) projects = fetchedProjects;
-  } catch {
-    // Use defaults
+  if (!initialized || loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+      </div>
+    );
   }
 
-  const upcomingTasks = tasks
+  const user = currentUser ?? { id: "demo", name: "Demo User", email: "demo@adana.dev" };
+
+  const allTasks = tasks as Array<Record<string, unknown>>;
+
+  const upcomingTasks = allTasks
     .filter((t) => !t.completed && t.dueDate)
     .sort(
       (a, b) =>
@@ -73,17 +50,19 @@ export default async function HomePage() {
     )
     .slice(0, 5);
 
-  const completedCount = tasks.filter((t) => t.completed).length;
-  const overdueCount = tasks.filter(
+  const completedCount = allTasks.filter((t) => t.completed).length;
+  const overdueCount = allTasks.filter(
     (t) => !t.completed && t.dueDate && new Date(t.dueDate as string) < new Date()
   ).length;
+
+  const allProjects = projects as Array<Record<string, unknown>>;
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 p-6">
       {/* Welcome */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">
-          Good {getGreeting()}, {user.name.split(" ")[0]}
+          Good {getGreeting()}, {(user.name as string).split(" ")[0]}
         </h1>
         <p className="mt-1 text-sm text-gray-500">
           Here&apos;s what&apos;s happening across your projects.
@@ -108,10 +87,10 @@ export default async function HomePage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-        <StatCard label="Total Tasks" value={tasks.length} />
+        <StatCard label="Total Tasks" value={allTasks.length} />
         <StatCard label="Completed" value={completedCount} />
         <StatCard label="Overdue" value={overdueCount} accent={overdueCount > 0} />
-        <StatCard label="Projects" value={projects.length} />
+        <StatCard label="Projects" value={allProjects.length} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -157,12 +136,12 @@ export default async function HomePage() {
             </Link>
           </div>
           <ul className="divide-y divide-gray-100">
-            {projects.length === 0 && (
+            {allProjects.length === 0 && (
               <li className="px-5 py-8 text-center text-sm text-gray-400">
                 No projects yet. Create one to get started.
               </li>
             )}
-            {projects.slice(0, 5).map((project) => (
+            {allProjects.slice(0, 5).map((project) => (
               <li key={project.id as string}>
                 <Link
                   href={`/projects/${project.id}/list`}

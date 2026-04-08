@@ -1,19 +1,13 @@
-import { getTasks } from "@/app/actions/task-actions";
-import { CalendarPageClient } from "./calendar-client";
+import CalendarViewClient from "./calendar-view";
 
-export default async function ProjectCalendarPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
+export function generateStaticParams() {
+  return [
+    { id: "project-website" },
+    { id: "project-mobile" },
+    { id: "project-marketing" },
+  ];
+}
 
-  const tasks = await getTasks(id);
-
-  return (
-    <CalendarPageClient
-      projectId={id}
-      initialTasks={JSON.parse(JSON.stringify(tasks))}
-    />
-  );
+export default function Page() {
+  return <CalendarViewClient />;
 }

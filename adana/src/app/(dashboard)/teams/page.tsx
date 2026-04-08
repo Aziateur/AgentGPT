@@ -1,29 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import {
   Plus,
   Users,
   FolderKanban,
-  MoreHorizontal,
   Mail,
   Search,
-  UserPlus,
   ChevronRight,
 } from "lucide-react";
+import { useAppStore } from "@/store/app-store";
 
-// -- Types --------------------------------------------------------------------
-
-interface TeamData {
-  id: string;
-  name: string;
-  description: string | null;
-  _count: { members: number; projects: number };
-  members?: {
-    user: { id: string; name: string; email: string; avatar: string | null };
-    role: string;
-  }[];
-}
+// -- Helpers ------------------------------------------------------------------
 
 const memberColors = [
   "bg-blue-100 text-blue-600",
@@ -44,57 +32,27 @@ function colorForIndex(i: number) {
 // -- Component ----------------------------------------------------------------
 
 export default function TeamsPage() {
-  const [teams, setTeams] = useState<TeamData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { users, projects, loading } = useAppStore();
   const [searchQuery, setSearchQuery] = useState("");
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newDescription, setNewDescription] = useState("");
-  const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
+  const [expandedTeam, setExpandedTeam] = useState<string | null>("team-1");
 
-  const loadTeams = useCallback(async () => {
-    try {
-      const { getTeams, getTeam } = await import("@/app/actions/team-actions");
-      const list = await getTeams();
-      // Load detail for each team to get members
-      const detailed = await Promise.all(
-        (list as TeamData[]).map(async (t) => {
-          const full = await getTeam(t.id);
-          return { ...t, members: full?.members || [] } as TeamData;
-        })
-      );
-      setTeams(detailed);
-    } catch {
-      // keep empty
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadTeams();
-  }, [loadTeams]);
-
-  const handleCreate = async () => {
-    if (!newName.trim()) return;
-    const { createTeam } = await import("@/app/actions/team-actions");
-    const result = await createTeam({
-      name: newName,
-      description: newDescription || undefined,
-    });
-    if (!("error" in result)) {
-      setNewName("");
-      setNewDescription("");
-      setShowCreateModal(false);
-      loadTeams();
-    }
+  // Build a synthetic "team" from store.users grouped into one default team
+  // since teams aren't in the Supabase store
+  const allTeam = {
+    id: "team-1",
+    name: "Workspace Team",
+    description: "All members of this workspace",
+    memberCount: users.length,
+    projectCount: projects.length,
+    members: users.map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: "member",
+    })),
   };
 
-  const handleRemoveMember = async (teamId: string, userId: string) => {
-    const { removeTeamMember } = await import("@/app/actions/team-actions");
-    await removeTeamMember(teamId, userId);
-    loadTeams();
-  };
+  const teams = [allTeam];
 
   const filtered = teams.filter(
     (t) =>
@@ -115,13 +73,18 @@ export default function TeamsPage() {
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Teams</h1>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-        >
-          <Plus className="h-4 w-4" />
-          Create Team
-        </button>
+        <div className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700">
+          <Users className="h-4 w-4" />
+          {users.length} members
+        </div>
+      </div>
+
+      {/* Info banner */}
+      <div className="mb-6 rounded-xl border border-indigo-100 bg-indigo-50 px-5 py-4">
+        <p className="text-sm font-medium text-indigo-800">Teams Management</p>
+        <p className="mt-1 text-sm text-indigo-600">
+          Full team creation and management features are coming soon. Below you can see all workspace members.
+        </p>
       </div>
 
       {/* Search */}
@@ -141,13 +104,13 @@ export default function TeamsPage() {
         <div className="rounded-xl border border-gray-200 bg-white px-6 py-16 text-center shadow-sm">
           <Users className="mx-auto mb-3 h-10 w-10 text-gray-300" />
           <p className="text-sm font-medium text-gray-900">No teams found</p>
-          <p className="mt-1 text-sm text-gray-500">Try a different search or create a new team.</p>
+          <p className="mt-1 text-sm text-gray-500">Try a different search term.</p>
         </div>
       ) : (
         <div className="space-y-4">
           {filtered.map((team) => {
             const isExpanded = expandedTeam === team.id;
-            const members = team.members || [];
+            const members = team.members;
             return (
               <div key={team.id} className="rounded-xl border border-gray-200 bg-white shadow-sm transition hover:shadow-md">
                 {/* Team header */}
@@ -155,9 +118,7 @@ export default function TeamsPage() {
                   className="flex cursor-pointer items-center gap-4 px-6 py-4"
                   onClick={() => setExpandedTeam(isExpanded ? null : team.id)}
                 >
-                  <div
-                    className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white"
-                  >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">
                     {team.name[0]}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -169,21 +130,21 @@ export default function TeamsPage() {
                   <div className="flex items-center gap-4 text-xs text-gray-500">
                     <span className="flex items-center gap-1">
                       <Users className="h-3.5 w-3.5" />
-                      {team._count.members} members
+                      {team.memberCount} members
                     </span>
                     <span className="flex items-center gap-1">
                       <FolderKanban className="h-3.5 w-3.5" />
-                      {team._count.projects} projects
+                      {team.projectCount} projects
                     </span>
                   </div>
                   <div className="flex -space-x-2">
                     {members.slice(0, 4).map((m, idx) => (
                       <div
-                        key={m.user.id}
+                        key={m.id}
                         className={`flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-[10px] font-medium ${colorForIndex(idx)}`}
-                        title={m.user.name}
+                        title={m.name}
                       >
-                        {m.user.name?.[0] || "?"}
+                        {m.name?.[0] || "?"}
                       </div>
                     ))}
                     {members.length > 4 && (
@@ -208,27 +169,22 @@ export default function TeamsPage() {
                     ) : (
                       <ul className="divide-y divide-gray-50">
                         {members.map((member, idx) => (
-                          <li key={member.user.id} className="flex items-center gap-3 px-6 py-3 hover:bg-gray-50">
+                          <li key={member.id} className="flex items-center gap-3 px-6 py-3 hover:bg-gray-50">
                             <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${colorForIndex(idx)}`}>
-                              {member.user.name?.[0] || "?"}
+                              {member.name?.[0] || "?"}
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-gray-900">{member.user.name}</p>
+                              <p className="text-sm font-medium text-gray-900">{member.name}</p>
                               <p className="text-xs text-gray-500">{member.role}</p>
                             </div>
-                            <a href={`mailto:${member.user.email}`} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
-                              <Mail className="h-3.5 w-3.5" />
-                            </a>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRemoveMember(team.id, member.user.id);
-                              }}
-                              className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
-                              title="Remove member"
-                            >
-                              <MoreHorizontal className="h-3.5 w-3.5" />
-                            </button>
+                            {member.email && (
+                              <a
+                                href={`mailto:${member.email}`}
+                                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                              >
+                                <Mail className="h-3.5 w-3.5" />
+                              </a>
+                            )}
                           </li>
                         ))}
                       </ul>
@@ -238,45 +194,6 @@ export default function TeamsPage() {
               </div>
             );
           })}
-        </div>
-      )}
-
-      {/* Create team modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-            <h2 className="mb-4 text-lg font-semibold text-gray-900">Create Team</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Team Name</label>
-                <input
-                  type="text"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="e.g. Engineering"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Description</label>
-                <textarea
-                  rows={3}
-                  value={newDescription}
-                  onChange={(e) => setNewDescription(e.target.value)}
-                  placeholder="What does this team do?"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                />
-              </div>
-            </div>
-            <div className="mt-6 flex justify-end gap-2">
-              <button onClick={() => setShowCreateModal(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
-                Cancel
-              </button>
-              <button onClick={handleCreate} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
-                Create
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>

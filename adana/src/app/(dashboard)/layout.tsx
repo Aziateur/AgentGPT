@@ -1,47 +1,41 @@
-import { DashboardLayout } from "@/components/layout/dashboard-layout";
-import { getCurrentUser } from "@/app/actions/auth-actions";
-import { getProjects } from "@/app/actions/project-actions";
-import { getTeams } from "@/app/actions/team-actions";
-import { getUnreadCount } from "@/app/actions/notification-actions";
+"use client";
 
-export default async function DashboardRootLayout({
+import { useEffect } from "react";
+import { DashboardLayout } from "@/components/layout/dashboard-layout";
+import { useAppStore } from "@/store/app-store";
+
+export default function DashboardRootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  let user = null;
-  let projects: Array<Record<string, unknown>> = [];
-  let teams: Array<Record<string, unknown>> = [];
-  let notificationCount = 0;
+  const store = useAppStore();
+  const { initialized, loading, currentUser, projects, notifications, init } = store;
 
-  try {
-    const [fetchedUser, fetchedProjects, fetchedTeams, fetchedCount] =
-      await Promise.all([
-        getCurrentUser(),
-        getProjects(),
-        getTeams(),
-        getUnreadCount(),
-      ]);
+  useEffect(() => {
+    init();
+  }, [init]);
 
-    user = fetchedUser;
-    if (Array.isArray(fetchedProjects)) projects = fetchedProjects;
-    if (Array.isArray(fetchedTeams)) teams = fetchedTeams;
-    if (typeof fetchedCount === "number") notificationCount = fetchedCount;
-  } catch {
-    // Fallback user for demo/development
-    user = {
-      id: "demo-user",
-      name: "Demo User",
-      email: "demo@adana.dev",
-      avatar: null,
-    };
+  if (!initialized || loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+          <p className="text-sm text-gray-500">Loading...</p>
+        </div>
+      </div>
+    );
   }
+
+  const notificationCount = notifications.filter(
+    (n) => !n.read && !n.archived
+  ).length;
 
   return (
     <DashboardLayout
-      user={user}
+      user={currentUser}
       projects={projects}
-      teams={teams}
+      teams={[]}
       notificationCount={notificationCount}
     >
       {children}

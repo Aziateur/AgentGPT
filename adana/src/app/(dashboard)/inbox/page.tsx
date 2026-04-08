@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import { useAppStore } from "@/store/app-store";
 import type { Notification } from "@/types";
 
 // -- Helpers ------------------------------------------------------------------
@@ -53,25 +54,14 @@ type FilterKey = "all" | string;
 // -- Component ----------------------------------------------------------------
 
 export default function InboxPage() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const {
+    notifications,
+    loading,
+    markNotificationRead,
+    markAllNotificationsRead,
+    archiveNotification,
+  } = useAppStore();
   const [filter, setFilter] = useState<FilterKey>("all");
-  const [loading, setLoading] = useState(true);
-
-  const loadNotifications = useCallback(async () => {
-    try {
-      const { getNotifications } = await import("@/app/actions/notification-actions");
-      const fetched = await getNotifications();
-      if (fetched) setNotifications(fetched as Notification[]);
-    } catch {
-      // keep empty
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadNotifications();
-  }, [loadNotifications]);
 
   const filters: { key: FilterKey; label: string }[] = [
     { key: "all", label: "All" },
@@ -81,47 +71,18 @@ export default function InboxPage() {
     { key: "mentioned", label: "Mentions" },
   ];
 
-  const visible = notifications.filter((n) => {
+  const visible = notifications.filter((n: Notification) => {
     if (n.archived) return false;
     if (filter !== "all" && n.type !== filter) return false;
     return true;
   });
 
-  const unreadCount = notifications.filter((n) => !n.read && !n.archived).length;
+  const unreadCount = notifications.filter((n: Notification) => !n.read && !n.archived).length;
 
-  async function toggleRead(id: string) {
-    // Optimistic update
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: !n.read } : n))
-    );
-    try {
-      const { markAsRead } = await import("@/app/actions/notification-actions");
-      await markAsRead(id);
-    } catch {
-      // revert on error
-      loadNotifications();
-    }
-  }
-
-  async function markAllRead() {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    try {
-      const { markAllAsRead } = await import("@/app/actions/notification-actions");
-      await markAllAsRead();
-    } catch {
-      loadNotifications();
-    }
-  }
-
-  async function archive(id: string) {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, archived: true } : n))
-    );
-    try {
-      const { archiveNotification } = await import("@/app/actions/notification-actions");
-      await archiveNotification(id);
-    } catch {
-      loadNotifications();
+  function toggleRead(id: string) {
+    const n = notifications.find((notif: Notification) => notif.id === id);
+    if (n && !n.read) {
+      markNotificationRead(id);
     }
   }
 
@@ -157,7 +118,7 @@ export default function InboxPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={markAllRead}
+            onClick={markAllNotificationsRead}
             className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
           >
             Mark all read
@@ -203,7 +164,7 @@ export default function InboxPage() {
           </div>
         ) : (
           <ul className="divide-y divide-gray-100">
-            {visible.map((n) => (
+            {visible.map((n: Notification) => (
               <li
                 key={n.id}
                 className={`group flex items-start gap-3 px-5 py-4 transition ${
@@ -238,7 +199,7 @@ export default function InboxPage() {
                     </svg>
                   </button>
                   <button
-                    onClick={() => archive(n.id)}
+                    onClick={() => archiveNotification(n.id)}
                     title="Archive"
                     className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                   >

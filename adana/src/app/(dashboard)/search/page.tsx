@@ -1,151 +1,97 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search as SearchIcon,
   FileText,
   FolderKanban,
-  Users,
   CheckSquare,
   X,
-  SlidersHorizontal,
-  Clock,
   Bookmark,
 } from "lucide-react";
+import { useAppStore } from "@/store/app-store";
 
 // -- Types --------------------------------------------------------------------
 
 interface SearchResult {
   id: string;
-  type: "task" | "project" | "person";
+  type: "task" | "project";
   title: string;
   subtitle: string;
   meta?: string;
   href: string;
 }
 
-interface SavedSearchItem {
-  id: string;
-  name: string;
-  query: string;
-  filters: Record<string, unknown>;
-}
-
 const typeIcon: Record<string, typeof FileText> = {
   task: CheckSquare,
   project: FolderKanban,
-  person: Users,
 };
 
 const typeColor: Record<string, string> = {
   task: "bg-blue-50 text-blue-600",
   project: "bg-purple-50 text-purple-600",
-  person: "bg-green-50 text-green-600",
 };
 
-type TabKey = "all" | "task" | "project" | "person";
+type TabKey = "all" | "task" | "project";
 
 // -- Component ----------------------------------------------------------------
 
 export default function SearchPage() {
   const router = useRouter();
+  const { tasks, projects, loading } = useAppStore();
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("all");
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [savedSearches, setSavedSearches] = useState<SavedSearchItem[]>([]);
-  const [loading, setLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // Load saved searches on mount
+  // Client-side search over store data
   useEffect(() => {
-    async function loadSaved() {
-      try {
-        const { getSavedSearches } = await import("@/app/actions/search-actions");
-        const searches = await getSavedSearches();
-        if (searches) setSavedSearches(searches as SavedSearchItem[]);
-      } catch {
-        // ignore
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      if (!query.trim()) {
+        setResults([]);
+        return;
       }
-    }
-    loadSaved();
-  }, []);
-
-  const doSearch = useCallback(async (searchQuery: string) => {
-    if (!searchQuery.trim()) {
-      setResults([]);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const { globalSearch } = await import("@/app/actions/search-actions");
-      const data = await globalSearch(searchQuery);
-
+      const q = query.toLowerCase();
       const mapped: SearchResult[] = [];
 
-      // Map tasks
-      if (data.tasks) {
-        for (const task of data.tasks as Array<Record<string, unknown>>) {
-          const project = task.project as { id?: string; name?: string } | null;
+      // Search tasks
+      for (const task of tasks) {
+        if (task.title.toLowerCase().includes(q)) {
+          const project = projects.find((p) => p.id === task.projectId);
           mapped.push({
-            id: task.id as string,
+            id: task.id,
             type: "task",
-            title: task.title as string,
-            subtitle: project ? `${project.name}` : "No project",
-            meta: task.priority ? `${task.priority} priority` : undefined,
-            href: project?.id
-              ? `/projects/${project.id}/list`
-              : "/my-tasks",
+            title: task.title,
+            subtitle: project ? project.name : "No project",
+            meta: task.priority && task.priority !== "none" ? `${task.priority} priority` : undefined,
+            href: project ? `/projects/${project.id}/list` : "/my-tasks",
           });
         }
       }
 
-      // Map projects
-      if (data.projects) {
-        for (const project of data.projects as Array<Record<string, unknown>>) {
-          const count = project._count as { tasks?: number; members?: number } | undefined;
+      // Search projects
+      for (const project of projects) {
+        if (project.name.toLowerCase().includes(q) || (project.description || "").toLowerCase().includes(q)) {
+          const taskCount = tasks.filter((t) => t.projectId === project.id).length;
           mapped.push({
-            id: project.id as string,
+            id: project.id,
             type: "project",
-            title: project.name as string,
-            subtitle: `${count?.tasks ?? 0} tasks, ${count?.members ?? 0} members`,
+            title: project.name,
+            subtitle: `${taskCount} task${taskCount !== 1 ? "s" : ""}`,
             href: `/projects/${project.id}/list`,
           });
         }
       }
 
-      // Map users
-      if (data.users) {
-        for (const user of data.users as Array<Record<string, unknown>>) {
-          mapped.push({
-            id: user.id as string,
-            type: "person",
-            title: user.name as string,
-            subtitle: user.email as string,
-            href: "/teams",
-          });
-        }
-      }
-
       setResults(mapped);
-    } catch {
-      setResults([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Debounced search
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      doSearch(query);
     }, 300);
+
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query, doSearch]);
+  }, [query, tasks, projects]);
 
   const filtered = results.filter((r) => {
     if (activeTab === "all") return true;
@@ -156,30 +102,13 @@ export default function SearchPage() {
     all: results.length,
     task: results.filter((r) => r.type === "task").length,
     project: results.filter((r) => r.type === "project").length,
-    person: results.filter((r) => r.type === "person").length,
   };
 
   const tabs: { key: TabKey; label: string; count: number }[] = [
     { key: "all", label: "All", count: tabCounts.all },
     { key: "task", label: "Tasks", count: tabCounts.task },
     { key: "project", label: "Projects", count: tabCounts.project },
-    { key: "person", label: "People", count: tabCounts.person },
   ];
-
-  async function handleSaveSearch() {
-    if (!query.trim()) return;
-    try {
-      const { saveSearch } = await import("@/app/actions/search-actions");
-      const result = await saveSearch(query, query, { query });
-      if (result && !("error" in result)) {
-        const { getSavedSearches } = await import("@/app/actions/search-actions");
-        const searches = await getSavedSearches();
-        if (searches) setSavedSearches(searches as SavedSearchItem[]);
-      }
-    } catch {
-      // ignore
-    }
-  }
 
   function handleResultClick(result: SearchResult) {
     router.push(result.href);
@@ -194,51 +123,21 @@ export default function SearchPage() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search tasks, projects, and people..."
+          placeholder="Search tasks and projects..."
           autoFocus
           className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-12 pr-20 text-base text-gray-900 placeholder:text-gray-400 shadow-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
         />
         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
           {query && (
-            <>
-              <button
-                onClick={handleSaveSearch}
-                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                title="Save search"
-              >
-                <Bookmark className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setQuery("")}
-                className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </>
+            <button
+              onClick={() => setQuery("")}
+              className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            >
+              <X className="h-4 w-4" />
+            </button>
           )}
         </div>
       </div>
-
-      {/* Saved searches (when empty) */}
-      {!query && savedSearches.length > 0 && (
-        <div className="mb-6">
-          <h3 className="mb-3 flex items-center gap-1.5 text-xs font-medium text-gray-500">
-            <Bookmark className="h-3.5 w-3.5" />
-            Saved Searches
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {savedSearches.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => setQuery(s.query)}
-                className="rounded-full border border-gray-200 bg-white px-3 py-1 text-sm text-gray-600 hover:bg-gray-50"
-              >
-                {s.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Tabs */}
       <div className="mb-4 flex items-center gap-1 border-b border-gray-200">
@@ -277,7 +176,7 @@ export default function SearchPage() {
           <p className="mt-1 text-sm text-gray-500">
             {query
               ? "Try different keywords or remove filters."
-              : "Search tasks, projects, and people across your workspace."}
+              : "Search tasks and projects across your workspace."}
           </p>
         </div>
       ) : (
