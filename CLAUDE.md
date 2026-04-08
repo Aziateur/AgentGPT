@@ -309,4 +309,6 @@ Source: recherche exhaustive sur asana.com (avril 2026)
 
 ## DEPLOYMENT
 - ALWAYS push to production.
-- Whenever updates are made to the code, ensure all changes are committed and pushed to the `main` branch to trigger a production deployment. Do not leave changes unpushed!
+- Cloudflare Pages is configured with `gh-pages` as the Production branch while `main` is just Preview. 
+- Therefore, whenever updates are made to the code, you MUST push your changes to that branch specifically using: `git push origin main:gh-pages`
+- Do not leave changes unpushed!
