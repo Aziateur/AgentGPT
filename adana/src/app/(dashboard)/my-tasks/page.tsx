@@ -247,7 +247,7 @@ export default function MyTasksPage() {
                   >
                     {task.title}
                   </p>
-                  {(task as Record<string, unknown>).project && (
+                  {!!(task as Record<string, unknown>).project && (
                     <p className="text-xs text-gray-400">
                       {((task as Record<string, unknown>).project as { name: string })?.name}
                     </p>

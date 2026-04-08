@@ -40,6 +40,7 @@ const TIMEFRAME_LABELS: Record<GoalTimeframe, string> = {
   h1: "H1",
   h2: "H2",
   annual: "Annual",
+  custom: "Custom",
 };
 
 interface GoalNode {

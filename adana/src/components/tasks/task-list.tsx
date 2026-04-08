@@ -14,9 +14,9 @@ import type { Task, User, Tag, CustomFieldDef } from "@/types";
 // -- Mock data ----------------------------------------------------------------
 
 const mockUsers: Record<string, User> = {
-  "demo-user": { id: "demo-user", name: "Demo User", email: "demo@adana.io", avatarUrl: null, bio: null, jobTitle: null, department: null, role: "admin", timezone: "UTC", theme: "light", teamIds: [], createdAt: "", updatedAt: "" },
-  "user-2": { id: "user-2", name: "Sarah Chen", email: "sarah@adana.io", avatarUrl: null, bio: null, jobTitle: null, department: null, role: "member", timezone: "UTC", theme: "light", teamIds: [], createdAt: "", updatedAt: "" },
-  "user-3": { id: "user-3", name: "Alex Kim", email: "alex@adana.io", avatarUrl: null, bio: null, jobTitle: null, department: null, role: "member", timezone: "UTC", theme: "light", teamIds: [], createdAt: "", updatedAt: "" },
+  "demo-user": { id: "demo-user", name: "Demo User", email: "demo@adana.io", avatar: null, role: "admin", timezone: "UTC", theme: "light" },
+  "user-2": { id: "user-2", name: "Sarah Chen", email: "sarah@adana.io", avatar: null, role: "member", timezone: "UTC", theme: "light" },
+  "user-3": { id: "user-3", name: "Alex Kim", email: "alex@adana.io", avatar: null, role: "member", timezone: "UTC", theme: "light" },
 };
 
 // -- Props --------------------------------------------------------------------
@@ -76,6 +76,10 @@ export function TaskList({
     setAddingTaskInSection(null);
   }
 
+  const getTaskTags = (task: Task) => {
+    return (task.tagIds || []).map((id) => tags.find((t) => t.id === id)).filter(Boolean) as Tag[];
+  };
+
   const totalTasks = initialSections.reduce((sum, s) => sum + s.tasks.length, 0);
 
   return (
@@ -134,7 +138,7 @@ export function TaskList({
                       key={task.id}
                       task={task}
                       assignee={task.assigneeId ? mockUsers[task.assigneeId] : null}
-                      tags={tags.filter((t) => task.tagIds.includes(t.id))}
+                      tags={tags.filter((t) => (task.tagIds || []).includes(t.id))}
                       customFieldDefs={customFieldDefs}
                       onComplete={onTaskComplete}
                       onUpdate={onTaskUpdate}

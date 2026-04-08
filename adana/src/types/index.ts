@@ -10,7 +10,7 @@ export type ApprovalStatus = "pending" | "approved" | "rejected" | "changes_requ
 
 export type ProjectStatusType = "on_track" | "at_risk" | "off_track" | "on_hold" | "complete";
 
-export type GoalStatus = "on_track" | "at_risk" | "off_track" | "achieved" | "missed";
+export type GoalStatus = "on_track" | "at_risk" | "off_track" | "achieved" | "missed" | "dropped";
 
 export type GoalTimeframe = "q1" | "q2" | "q3" | "q4" | "h1" | "h2" | "annual" | "custom";
 
@@ -58,6 +58,11 @@ export interface Project {
   favorite: boolean;
   defaultView: string;
   creatorId: string;
+  startDate?: string | null;
+  dueDate?: string | null;
+  statusText?: string | null;
+  createdAt: string;
+  updatedAt: string;
   teamId?: string | null;
   sections?: Section[];
   members?: ProjectMember[];
@@ -119,13 +124,14 @@ export interface Task {
   section?: Section | null;
   subtasks?: Task[];
   comments?: Comment[];
-  tags?: Tag[];
+  tags?: { tag: Tag }[];
   attachments?: Attachment[];
   blockedBy?: Dependency[];
   blocking?: Dependency[];
   customValues?: CustomFieldValue[];
   likes?: TaskLike[];
   followers?: TaskFollower[];
+  tagIds?: string[];
   [key: string]: unknown;
 }
 
@@ -185,12 +191,21 @@ export interface CustomFieldDef {
   values?: CustomFieldValue[];
 }
 
+export type FormFieldType =
+  | "text"
+  | "paragraph"
+  | "number"
+  | "date"
+  | "single_select"
+  | "multi_select";
+
 export interface CustomFieldValue {
   id: string;
   value?: string | null;
   taskId: string;
   fieldId: string;
   field?: CustomFieldDef;
+  [key: string]: unknown;
 }
 
 export interface Attachment {
@@ -212,8 +227,25 @@ export interface Notification {
   archived: boolean;
   userId: string;
   linkUrl?: string | null;
-  createdAt: string;
+  createdAt: string | Date;
 }
+
+export type AutomationTrigger =
+  | "task_added"
+  | "task_completed"
+  | "task_moved_to_section"
+  | "due_date_approaching"
+  | "status_changed"
+  | "custom_field_changed";
+
+export type AutomationAction =
+  | "assign_task"
+  | "set_due_date"
+  | "move_to_section"
+  | "add_comment"
+  | "mark_complete"
+  | "set_custom_field"
+  | "create_subtask";
 
 export interface AutomationRule {
   id: string;
@@ -267,6 +299,8 @@ export interface Goal {
   endDate?: string | null;
   ownerId: string;
   parentId?: string | null;
+  targetValue?: number;
+  currentValue?: number;
   owner?: User;
   parent?: Goal | null;
   subGoals?: Goal[];
@@ -287,6 +321,7 @@ export interface Form {
   description?: string | null;
   active: boolean;
   projectId: string;
+  submissionCount?: number;
   fields?: FormField[];
   submissions?: FormSubmission[];
   [key: string]: unknown;

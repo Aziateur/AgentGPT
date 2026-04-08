@@ -171,8 +171,8 @@ interface RuleData {
   projectId: string;
   creatorId: string;
   _count?: { executions: number };
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string | Date;
+  updatedAt: string | Date;
 }
 
 interface ExecutionLog {
@@ -180,7 +180,7 @@ interface ExecutionLog {
   ruleId: string;
   success: boolean;
   details: string | null;
-  createdAt: string;
+  createdAt: string | Date;
   user: { id: string; name: string; avatar: string | null } | null;
 }
 

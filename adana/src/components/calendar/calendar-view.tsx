@@ -44,31 +44,31 @@ const MOCK_USERS: Record<string, User> = {
   u3: { id: "u3", name: "Carol Smith", email: "carol@example.com", avatarUrl: null, bio: null, role: "member", teamIds: ["t1"], createdAt: "", updatedAt: "" },
 };
 
-function makeTask(overrides: Partial<Task> & { id: string; name: string }): Task {
+function makeTask(overrides: Partial<Task> & { id: string; title: string }): Task {
   return {
     description: null, htmlDescription: null, status: "not_started", priority: "none",
-    type: "task", completed: false, completedAt: null, assigneeId: null, projectId: "p1",
-    sectionId: null, parentTaskId: null, order: 0, dueDate: null, startDate: null,
+    taskType: "task", completed: false, isTemplate: false, completedAt: null, assigneeId: null, creatorId: "u1", projectId: "p1",
+    sectionId: null, parentTaskId: null, position: 0, dueDate: null, startDate: null,
     estimatedMinutes: null, actualMinutes: null, tagIds: [], followerIds: [], subtaskIds: [],
-    dependencyIds: [], approvalStatus: null, approverIds: [], likes: 0, attachmentCount: 0,
+    dependencyIds: [], approvalStatus: null, approverIds: [], likes: [], attachmentCount: 0,
     commentCount: 0, customFieldValues: [], createdAt: "", updatedAt: "",
     ...overrides,
   };
 }
 
 const MOCK_TASKS: Task[] = [
-  makeTask({ id: "t1", name: "Design review", priority: "high", assigneeId: "u1", dueDate: "2026-04-03" }),
-  makeTask({ id: "t2", name: "Sprint planning", priority: "medium", assigneeId: "u2", dueDate: "2026-04-03" }),
-  makeTask({ id: "t3", name: "API endpoints", priority: "high", assigneeId: "u2", dueDate: "2026-04-05" }),
-  makeTask({ id: "t4", name: "Write tests", priority: "low", assigneeId: "u3", dueDate: "2026-04-08" }),
-  makeTask({ id: "t5", name: "Deploy staging", priority: "medium", dueDate: "2026-04-10" }),
-  makeTask({ id: "t6", name: "Client demo", priority: "high", assigneeId: "u1", dueDate: "2026-04-14", type: "milestone" }),
-  makeTask({ id: "t7", name: "Bug triage", priority: "medium", assigneeId: "u3", dueDate: "2026-04-15" }),
-  makeTask({ id: "t8", name: "Release v2.0", priority: "high", assigneeId: "u2", dueDate: "2026-04-22", type: "milestone" }),
-  makeTask({ id: "t9", name: "Retrospective", priority: "low", dueDate: "2026-04-25" }),
-  makeTask({ id: "t10", name: "Update docs", priority: "low", assigneeId: "u1", dueDate: "2026-04-28" }),
-  makeTask({ id: "t11", name: "Database migration", priority: "high", assigneeId: "u2", dueDate: "2026-04-10" }),
-  makeTask({ id: "t12", name: "Performance audit", priority: "medium", assigneeId: "u3", dueDate: "2026-04-17" }),
+  makeTask({ id: "t1", title: "Design review", priority: "high", assigneeId: "u1", dueDate: "2026-04-03" } as any),
+  makeTask({ id: "t2", title: "Sprint planning", priority: "medium", assigneeId: "u2", dueDate: "2026-04-03" } as any),
+  makeTask({ id: "t3", title: "API endpoints", priority: "high", assigneeId: "u2", dueDate: "2026-04-05" } as any),
+  makeTask({ id: "t4", title: "Write tests", priority: "low", assigneeId: "u3", dueDate: "2026-04-08" } as any),
+  makeTask({ id: "t5", title: "Deploy staging", priority: "medium", dueDate: "2026-04-10" } as any),
+  makeTask({ id: "t6", title: "Client demo", priority: "high", assigneeId: "u1", dueDate: "2026-04-14", taskType: "milestone" } as any),
+  makeTask({ id: "t7", title: "Bug triage", priority: "medium", assigneeId: "u3", dueDate: "2026-04-15" } as any),
+  makeTask({ id: "t8", title: "Release v2.0", priority: "high", assigneeId: "u2", dueDate: "2026-04-22", taskType: "milestone" } as any),
+  makeTask({ id: "t9", title: "Retrospective", priority: "low", dueDate: "2026-04-25" } as any),
+  makeTask({ id: "t10", title: "Update docs", priority: "low", assigneeId: "u1", dueDate: "2026-04-28" } as any),
+  makeTask({ id: "t11", title: "Database migration", priority: "high", assigneeId: "u2", dueDate: "2026-04-10" } as any),
+  makeTask({ id: "t12", title: "Performance audit", priority: "medium", assigneeId: "u3", dueDate: "2026-04-17" } as any),
 ];
 
 // ---------------------------------------------------------------------------
@@ -223,7 +223,7 @@ export function CalendarView({
                       key={task.id}
                       content={
                         <div className="text-xs">
-                          <div className="font-medium">{task.name}</div>
+                          <div className="font-medium">{task.title}</div>
                           {assignee && <div className="text-gray-300 mt-0.5">{assignee.name}</div>}
                         </div>
                       }
@@ -231,7 +231,7 @@ export function CalendarView({
                       <button
                         className={cn(
                           "w-full rounded px-1.5 py-0.5 text-left text-[11px] font-medium truncate border transition-colors hover:brightness-95",
-                          PRIORITY_CHIP_COLORS[task.priority],
+                          PRIORITY_CHIP_COLORS[(task.priority as TaskPriority) ?? "none"],
                           task.completed && "opacity-50 line-through"
                         )}
                         onClick={(e) => {
@@ -239,10 +239,10 @@ export function CalendarView({
                           onTaskClick?.(task.id);
                         }}
                       >
-                        {task.type === "milestone" && (
+                        {task.taskType === "milestone" && (
                           <span className="mr-0.5">&#9670;</span>
                         )}
-                        {task.name}
+                        {task.title}
                       </button>
                     </Tooltip>
                   );

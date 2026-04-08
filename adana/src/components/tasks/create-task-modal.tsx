@@ -165,7 +165,7 @@ export function CreateTaskModal({
                 {users.map((user) => (
                   <SelectItem key={user.id} value={user.id}>
                     <span className="flex items-center gap-2">
-                      <Avatar size="xs" name={user.name} src={user.avatarUrl || undefined} />
+                      <Avatar size="xs" name={user.name} src={user.avatar as string | undefined} />
                       {user.name}
                     </span>
                   </SelectItem>

@@ -26,6 +26,7 @@ interface DashboardData {
     id: string;
     title: string;
     completed: boolean;
+    dueDate?: string | Date | null;
     assignee: { id: string; name: string; avatar: string | null } | null;
     project: { id: string; name: string; color: string } | null;
     createdAt: string;
@@ -163,9 +164,9 @@ export default function ReportingPage() {
     low: 0,
     none: 0,
   };
-  for (const stats of projectStats.values()) {
+  for (const stats of Array.from(projectStats.values())) {
     for (const [k, v] of Object.entries(stats.byPriority)) {
-      aggregatedPriority[k] = (aggregatedPriority[k] || 0) + v;
+      aggregatedPriority[k] = (aggregatedPriority[k] || 0) + (v as number);
     }
   }
   const totalPriorityTasks = Object.values(aggregatedPriority).reduce(
@@ -230,7 +231,7 @@ export default function ReportingPage() {
     string,
     { name: string; completed: number; initial: string }
   >();
-  for (const stats of projectStats.values()) {
+  for (const stats of Array.from(projectStats.values())) {
     for (const a of stats.byAssignee) {
       if (a.user.id === "unassigned") continue;
       const existing = contributorMap.get(a.user.id);
@@ -245,7 +246,7 @@ export default function ReportingPage() {
       }
     }
   }
-  const topContributors = [...contributorMap.values()]
+  const topContributors = Array.from(contributorMap.values())
     .sort((a, b) => b.completed - a.completed)
     .slice(0, 5);
   const contributorColors = [

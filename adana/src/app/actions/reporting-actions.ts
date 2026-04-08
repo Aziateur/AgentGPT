@@ -48,7 +48,7 @@ export async function getProjectStats(projectId: string) {
     }
 
     // Tasks by assignee
-    const assigneeIds = [...new Set(tasks.map((t: TaskRow) => t.assigneeId).filter(Boolean))] as string[];
+    const assigneeIds = Array.from(new Set(tasks.map((t: TaskRow) => t.assigneeId).filter(Boolean))) as string[];
     const assignees = await prisma.user.findMany({
       where: { id: { in: assigneeIds } },
       select: { id: true, name: true, avatar: true },
@@ -66,7 +66,7 @@ export async function getProjectStats(projectId: string) {
       assigneeCounts.set(aid, current);
     }
 
-    for (const [aid, counts] of assigneeCounts) {
+    for (const [aid, counts] of Array.from(assigneeCounts)) {
       const user: UserInfo = aid === "unassigned"
         ? { id: "unassigned", name: "Unassigned", avatar: null }
         : (assigneeMap.get(aid) as UserInfo) || { id: aid, name: "Unknown", avatar: null };

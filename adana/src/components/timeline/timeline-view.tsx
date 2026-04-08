@@ -46,42 +46,42 @@ export interface TimelineViewProps {
 // ---------------------------------------------------------------------------
 
 const MOCK_USERS: Record<string, User> = {
-  u1: { id: "u1", name: "Alice Chen", email: "alice@example.com", avatarUrl: null, bio: null, role: "member", teamIds: ["t1"], createdAt: "", updatedAt: "" },
-  u2: { id: "u2", name: "Bob Park", email: "bob@example.com", avatarUrl: null, bio: null, role: "member", teamIds: ["t1"], createdAt: "", updatedAt: "" },
-  u3: { id: "u3", name: "Carol Smith", email: "carol@example.com", avatarUrl: null, bio: null, role: "member", teamIds: ["t1"], createdAt: "", updatedAt: "" },
+  u1: { id: "u1", name: "Alice Chen", email: "alice@example.com", avatar: null },
+  u2: { id: "u2", name: "Bob Park", email: "bob@example.com", avatar: null },
+  u3: { id: "u3", name: "Carol Smith", email: "carol@example.com", avatar: null },
 };
 
-function makeTask(overrides: Partial<Task> & { id: string; name: string; sectionId: string }): Task {
+function makeTask(overrides: Partial<Task> & { id: string; title: string; sectionId: string }): Task {
   return {
     description: null, htmlDescription: null, status: "not_started", priority: "none",
-    type: "task", completed: false, completedAt: null, assigneeId: null, projectId: "p1",
-    parentTaskId: null, order: 0, dueDate: null, startDate: null, estimatedMinutes: null,
+    taskType: "task", completed: false, completedAt: null, assigneeId: null, projectId: "p1",
+    parentTaskId: null, position: 0, dueDate: null, startDate: null, estimatedMinutes: null,
     actualMinutes: null, tagIds: [], followerIds: [], subtaskIds: [], dependencyIds: [],
-    approvalStatus: null, approverIds: [], likes: 0, attachmentCount: 0, commentCount: 0,
-    customFieldValues: [], createdAt: "", updatedAt: "",
+    approvalStatus: null, approverIds: [], likes: [], attachmentCount: 0, commentCount: 0,
+    customFieldValues: [], createdAt: "", updatedAt: "", creatorId: "u1", isTemplate: false,
     ...overrides,
   };
 }
 
 const MOCK_SECTIONS: Section[] = [
-  { id: "s1", name: "Planning", projectId: "p1", order: 0, taskIds: ["t1", "t2"], createdAt: "" },
-  { id: "s2", name: "Development", projectId: "p1", order: 1, taskIds: ["t3", "t4", "t5"], createdAt: "" },
-  { id: "s3", name: "Launch", projectId: "p1", order: 2, taskIds: ["t6", "t7"], createdAt: "" },
+  { id: "s1", name: "To Do", projectId: "p1", position: 0, taskIds: ["t1", "t2"], createdAt: "" },
+  { id: "s2", name: "In Progress", projectId: "p1", position: 1, taskIds: ["t3"], createdAt: "" },
+  { id: "s3", name: "Review", projectId: "p1", position: 2, taskIds: [], createdAt: "" },
 ];
 
 const MOCK_TASKS: Task[] = [
-  makeTask({ id: "t1", name: "Research & discovery", sectionId: "s1", priority: "high", assigneeId: "u1", startDate: "2026-03-25", dueDate: "2026-04-04", order: 0 }),
-  makeTask({ id: "t2", name: "Define requirements", sectionId: "s1", priority: "medium", assigneeId: "u2", startDate: "2026-04-02", dueDate: "2026-04-08", dependencyIds: ["dep1"], order: 1 }),
-  makeTask({ id: "t3", name: "Backend API", sectionId: "s2", priority: "high", assigneeId: "u2", startDate: "2026-04-07", dueDate: "2026-04-18", order: 0 }),
-  makeTask({ id: "t4", name: "Frontend implementation", sectionId: "s2", priority: "high", assigneeId: "u1", startDate: "2026-04-10", dueDate: "2026-04-22", dependencyIds: ["dep2"], order: 1 }),
-  makeTask({ id: "t5", name: "Integration tests", sectionId: "s2", priority: "medium", assigneeId: "u3", startDate: "2026-04-20", dueDate: "2026-04-25", order: 2 }),
-  makeTask({ id: "t6", name: "QA & bug fixes", sectionId: "s3", priority: "medium", assigneeId: "u3", startDate: "2026-04-23", dueDate: "2026-04-29", order: 0 }),
-  makeTask({ id: "t7", name: "Production deploy", sectionId: "s3", priority: "high", assigneeId: "u2", startDate: "2026-04-30", dueDate: "2026-04-30", type: "milestone", order: 1 }),
+  makeTask({ id: "t1", title: "Research & discovery", sectionId: "s1", priority: "high", assigneeId: "u1", startDate: "2026-03-25", dueDate: "2026-04-04", position: 0 }),
+  makeTask({ id: "t2", title: "Define requirements", sectionId: "s1", priority: "medium", assigneeId: "u2", startDate: "2026-04-02", dueDate: "2026-04-08", dependencyIds: ["dep1"], position: 1 }),
+  makeTask({ id: "t3", title: "Backend API", sectionId: "s2", priority: "high", assigneeId: "u2", startDate: "2026-04-07", dueDate: "2026-04-18", position: 0 }),
+  makeTask({ id: "t4", title: "Frontend implementation", sectionId: "s2", priority: "high", assigneeId: "u1", startDate: "2026-04-10", dueDate: "2026-04-22", dependencyIds: ["dep2"], position: 1 }),
+  makeTask({ id: "t5", title: "Integration tests", sectionId: "s2", priority: "medium", assigneeId: "u3", startDate: "2026-04-20", dueDate: "2026-04-25", position: 2 }),
+  makeTask({ id: "t6", title: "QA & bug fixes", sectionId: "s3", priority: "medium", assigneeId: "u3", startDate: "2026-04-23", dueDate: "2026-04-29", position: 0 }),
+  makeTask({ id: "t7", title: "Production deploy", sectionId: "s3", priority: "high", assigneeId: "u2", startDate: "2026-04-30", dueDate: "2026-04-30", taskType: "milestone", position: 1 }),
 ];
 
 const MOCK_DEPENDENCIES: Dependency[] = [
-  { id: "dep1", sourceTaskId: "t1", targetTaskId: "t2", type: "blocking", createdAt: "" },
-  { id: "dep2", sourceTaskId: "t3", targetTaskId: "t4", type: "blocking", createdAt: "" },
+  { id: "d1", blockingTaskId: "t1", blockedTaskId: "t2", createdAt: "" },
+  { id: "d2", blockingTaskId: "t2", blockedTaskId: "t3", createdAt: "" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -168,14 +168,14 @@ export function TimelineView({
       if (t.sectionId && map[t.sectionId]) map[t.sectionId].push(t);
     }
     for (const key of Object.keys(map)) {
-      map[key].sort((a, b) => a.order - b.order);
+      map[key].sort((a, b) => a.position - b.position);
     }
     return map;
   }, [sections, tasks]);
 
   // Build flat row list: section headers + tasks
   const rows: Array<{ type: "section"; section: Section } | { type: "task"; task: Task; sectionIndex: number }> = [];
-  sections.forEach((sec, si) => {
+  sections.sort((a, b) => (a.position as number) - (b.position as number)).forEach((sec, si) => {
     rows.push({ type: "section", section: sec });
     (tasksBySection[sec.id] ?? []).forEach((t) => {
       rows.push({ type: "task", task: t, sectionIndex: si });
@@ -245,16 +245,16 @@ export function TimelineView({
 
   const depLines = useMemo(() => {
     return dependencies.map((dep) => {
-      const sourceTask = tasks.find((t) => t.id === dep.sourceTaskId);
-      const targetTask = tasks.find((t) => t.id === dep.targetTaskId);
+      const sourceTask = tasks.find((t) => t.id === dep.blockingTaskId);
+      const targetTask = tasks.find((t) => t.id === dep.blockedTaskId);
       if (!sourceTask || !targetTask) return null;
 
       const sourceBar = getBarStyle(sourceTask);
       const targetBar = getBarStyle(targetTask);
       if (!sourceBar || !targetBar) return null;
 
-      const sourceRow = taskRowIndex[dep.sourceTaskId];
-      const targetRow = taskRowIndex[dep.targetTaskId];
+      const sourceRow = taskRowIndex[dep.blockingTaskId];
+      const targetRow = taskRowIndex[dep.blockedTaskId];
       if (sourceRow === undefined || targetRow === undefined) return null;
 
       const x1 = sourceBar.left + sourceBar.width;
@@ -343,7 +343,7 @@ export function TimelineView({
                 );
               }
               const task = row.task;
-              const assignee = task.assigneeId ? users[task.assigneeId] : null;
+              const member = task.assigneeId ? users[task.assigneeId] : null;
               return (
                 <div
                   key={task.id}
@@ -351,10 +351,10 @@ export function TimelineView({
                   style={{ height: ROW_HEIGHT }}
                   onClick={() => onTaskClick?.(task.id)}
                 >
-                  {assignee && (
-                    <Avatar size="xs" name={assignee.name} src={assignee.avatarUrl ?? undefined} />
+                  {member && (
+                    <Avatar size="sm" name={member.name} src={member.avatar as string | undefined} />
                   )}
-                  <span className="truncate text-sm text-gray-800">{task.name}</span>
+                  <span className="truncate text-sm text-gray-800">{task.title}</span>
                 </div>
               );
             })}
@@ -486,23 +486,23 @@ export function TimelineView({
                     style={{ height: ROW_HEIGHT }}
                   >
                     {barStyle && (
-                      <Tooltip content={`${task.name}${task.startDate ? ` (${format(new Date(task.startDate), "MMM d")} - ${task.dueDate ? format(new Date(task.dueDate), "MMM d") : "?"})` : ""}`}>
+                      <Tooltip content={`${task.title}${task.startDate ? ` (${format(new Date(task.startDate), "MMM d")} - ${task.dueDate ? format(new Date(task.dueDate), "MMM d") : "?"})` : ""}`}>
                         <button
                           className={cn(
                             "absolute top-1.5 h-[26px] rounded-md shadow-sm cursor-pointer hover:brightness-110 transition-all flex items-center px-2 text-white text-[11px] font-medium truncate",
-                            task.type === "milestone" ? "bg-amber-500 rounded-full w-6 h-6 top-2 px-0 justify-center" : colorClass,
+                            task.taskType === "milestone" ? "bg-amber-500 rounded-full w-6 h-6 top-2 px-0 justify-center" : colorClass,
                             task.completed && "opacity-60"
                           )}
-                          style={task.type === "milestone"
+                          style={task.taskType === "milestone"
                             ? { left: barStyle.left - 12, width: 26 }
                             : { left: barStyle.left, width: barStyle.width }
                           }
                           onClick={() => onTaskClick?.(task.id)}
                         >
-                          {task.type === "milestone" ? (
+                          {task.taskType === "milestone" ? (
                             <span className="text-[10px]">&#9670;</span>
                           ) : (
-                            barStyle.width > 60 ? task.name : ""
+                            barStyle.width > 60 ? task.title : ""
                           )}
                         </button>
                       </Tooltip>

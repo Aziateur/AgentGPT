@@ -75,7 +75,9 @@ const MOCK_PROJECT: Project = {
   name: "Website Redesign",
   description: null,
   color: "#6366f1",
-  icon: null,
+  icon: "",
+  creatorId: "u1",
+  favorite: false,
   ownerId: "u1",
   teamId: "t1",
   privacy: "public",
@@ -92,10 +94,10 @@ const MOCK_PROJECT: Project = {
 };
 
 const MOCK_MEMBERS: User[] = [
-  { id: "u1", name: "Alice Chen", email: "alice@example.com", avatarUrl: null, bio: null, role: "owner", teamIds: ["t1"], createdAt: "", updatedAt: "" },
-  { id: "u2", name: "Bob Park", email: "bob@example.com", avatarUrl: null, bio: null, role: "member", teamIds: ["t1"], createdAt: "", updatedAt: "" },
-  { id: "u3", name: "Carol Smith", email: "carol@example.com", avatarUrl: null, bio: null, role: "member", teamIds: ["t1"], createdAt: "", updatedAt: "" },
-  { id: "u4", name: "David Lee", email: "david@example.com", avatarUrl: null, bio: null, role: "member", teamIds: ["t1"], createdAt: "", updatedAt: "" },
+  { id: "u1", name: "Alice Chen", email: "alice@example.com", avatar: null },
+  { id: "u2", name: "Bob Park", email: "bob@example.com", avatar: null },
+  { id: "u3", name: "Carol Smith", email: "carol@example.com", avatar: null },
+  { id: "u4", name: "David Lee", email: "david@example.com", avatar: null },
 ];
 
 // ---------------------------------------------------------------------------
@@ -131,10 +133,10 @@ export function ProjectHeader({
 }: ProjectHeaderProps) {
   const project = projectProp ?? MOCK_PROJECT;
   const members = membersProp ?? MOCK_MEMBERS;
-  const [activeView, setActiveView] = useState<ExtendedView>(currentViewProp ?? project.defaultView);
+  const [activeView, setActiveView] = useState<ExtendedView>((currentViewProp ?? project.defaultView) as ExtendedView);
   const [favorite, setFavorite] = useState(isFavoriteProp ?? false);
 
-  const statusCfg = STATUS_BADGE_MAP[project.status];
+  const statusCfg = STATUS_BADGE_MAP[project.status as ProjectStatusType];
 
   function handleViewChange(view: ExtendedView) {
     setActiveView(view);
@@ -176,7 +178,7 @@ export function ProjectHeader({
             {visibleMembers.map((member) => (
               <Tooltip key={member.id} content={member.name}>
                 <span className="relative inline-block ring-2 ring-white rounded-full">
-                  <Avatar size="sm" name={member.name} src={member.avatarUrl ?? undefined} />
+                  <Avatar size="sm" name={member.name} src={member.avatar ?? undefined} />
                 </span>
               </Tooltip>
             ))}

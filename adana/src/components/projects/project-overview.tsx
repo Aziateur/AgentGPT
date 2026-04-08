@@ -74,10 +74,10 @@ export interface ProjectOverviewProps {
 // ---------------------------------------------------------------------------
 
 const MOCK_USERS: User[] = [
-  { id: "u1", name: "Alice Chen", email: "alice@example.com", avatarUrl: null, bio: null, role: "owner", teamIds: ["t1"], createdAt: "", updatedAt: "" },
-  { id: "u2", name: "Bob Park", email: "bob@example.com", avatarUrl: null, bio: null, role: "member", teamIds: ["t1"], createdAt: "", updatedAt: "" },
-  { id: "u3", name: "Carol Smith", email: "carol@example.com", avatarUrl: null, bio: null, role: "member", teamIds: ["t1"], createdAt: "", updatedAt: "" },
-  { id: "u4", name: "David Lee", email: "david@example.com", avatarUrl: null, bio: null, role: "member", teamIds: ["t1"], createdAt: "", updatedAt: "" },
+  { id: "u1", name: "Alice Chen", email: "alice@example.com", avatar: null },
+  { id: "u2", name: "Bob Park", email: "bob@example.com", avatar: null },
+  { id: "u3", name: "Carol Smith", email: "carol@example.com", avatar: null },
+  { id: "u4", name: "David Lee", email: "david@example.com", avatar: null },
 ];
 
 const MOCK_PROJECT: Project = {
@@ -85,7 +85,9 @@ const MOCK_PROJECT: Project = {
   name: "Website Redesign",
   description: "Complete overhaul of the company website with modern design, improved performance, and better user experience. This project includes front-end development, back-end API updates, and content migration.",
   color: "#6366f1",
-  icon: null,
+  icon: "",
+  creatorId: "u1",
+  favorite: false,
   ownerId: "u1",
   teamId: "t1",
   privacy: "public",
@@ -116,12 +118,12 @@ const MOCK_ACTIVITIES: ActivityItem[] = [
 ];
 
 const MOCK_GOALS: Goal[] = [
-  { id: "g1", name: "Increase conversion rate by 20%", description: null, ownerId: "u1", teamId: "t1", status: "on_track", timeframe: "q2", year: 2026, startDate: null, dueDate: null, currentValue: 12, targetValue: 20, unit: "%", parentGoalId: null, subGoalIds: [], supportingProjectIds: ["p1"], supportingTaskIds: [], likes: 0, createdAt: "", updatedAt: "" },
-  { id: "g2", name: "Launch new website by Q2", description: null, ownerId: "u1", teamId: "t1", status: "on_track", timeframe: "q2", year: 2026, startDate: null, dueDate: null, currentValue: 65, targetValue: 100, unit: "%", parentGoalId: null, subGoalIds: [], supportingProjectIds: ["p1"], supportingTaskIds: [], likes: 0, createdAt: "", updatedAt: "" },
+  { id: "g1", name: "Increase conversion rate by 20%", status: "on_track", progress: 60, ownerId: "u1", targetValue: 20, currentValue: 12 },
+  { id: "g2", name: "Launch new website by Q2", status: "on_track", progress: 65, ownerId: "u1", targetValue: 100, currentValue: 65 },
 ];
 
 const MOCK_FORMS: Form[] = [
-  { id: "f1", name: "Bug Report Form", description: "Submit bugs found during testing", projectId: "p1", fields: [], active: true, createdById: "u1", submissionCount: 12, createdAt: "", updatedAt: "" },
+  { id: "f1", name: "Bug Report Form", description: "Submit bugs found during testing", projectId: "p1", fields: [], active: true, submissionCount: 12 },
 ];
 
 // ---------------------------------------------------------------------------
@@ -166,7 +168,7 @@ export function ProjectOverview({
   const overdueTasks = tasksProp?.filter((t) => t.dueDate && new Date(t.dueDate) < new Date() && !t.completed).length ?? 2;
   const completionPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-  const statusCfg = STATUS_CONFIG[project.status];
+  const statusCfg = STATUS_CONFIG[project.status as ProjectStatusType] || STATUS_CONFIG.on_track;
   const StatusIcon = statusCfg.icon;
 
   const usersMap: Record<string, User> = {};
@@ -219,7 +221,7 @@ export function ProjectOverview({
               const cfg = STATUS_CONFIG[update.status];
               return (
                 <div key={update.id} className="flex gap-3 text-sm">
-                  <Avatar size="xs" name={author?.name ?? "?"} src={author?.avatarUrl ?? undefined} />
+                  <Avatar size="xs" name={author?.name ?? "?"} src={author?.avatar as string | undefined} />
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-gray-900">{author?.name}</span>
@@ -329,7 +331,7 @@ export function ProjectOverview({
           {members.map((member) => (
             <Tooltip key={member.id} content={`${member.name} (${member.role})`}>
               <div className="flex items-center gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-                <Avatar size="sm" name={member.name} src={member.avatarUrl ?? undefined} />
+                <Avatar size="sm" name={member.name} src={member.avatar as string | undefined} />
                 <div className="min-w-0">
                   <div className="text-sm font-medium text-gray-900 truncate">{member.name}</div>
                   <div className="text-xs text-gray-500 truncate">{member.email}</div>
@@ -349,8 +351,8 @@ export function ProjectOverview({
           </h2>
           <div className="space-y-3">
             {goals.map((goal) => {
-              const progress = goal.targetValue > 0
-                ? Math.round((goal.currentValue / goal.targetValue) * 100)
+              const progress = (goal.targetValue ?? 0) > 0
+                ? Math.round(((goal.currentValue ?? 0) / (goal.targetValue ?? 1)) * 100)
                 : 0;
               return (
                 <div key={goal.id} className="flex items-center gap-3 rounded-lg border border-gray-100 p-3">
@@ -447,7 +449,7 @@ export function ProjectOverview({
             const user = usersMap[item.userId];
             return (
               <div key={item.id} className="flex items-start gap-3">
-                <Avatar size="xs" name={user?.name ?? "?"} src={user?.avatarUrl ?? undefined} />
+                <Avatar size="xs" name={user?.name ?? "?"} src={user?.avatar as string | undefined} />
                 <div className="min-w-0 text-sm">
                   <span className="font-medium text-gray-900">{user?.name}</span>{" "}
                   <span className="text-gray-500">{item.action}</span>{" "}

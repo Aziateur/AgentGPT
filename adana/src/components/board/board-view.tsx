@@ -29,31 +29,33 @@ import type { Section, Task, Tag, User } from "@/types";
 // ---------------------------------------------------------------------------
 
 const MOCK_USERS: Record<string, User> = {
-  u1: { id: "u1", name: "Alice Chen", email: "alice@example.com", avatarUrl: null, bio: null, role: "member", teamIds: ["t1"], createdAt: "", updatedAt: "" },
-  u2: { id: "u2", name: "Bob Park", email: "bob@example.com", avatarUrl: null, bio: null, role: "member", teamIds: ["t1"], createdAt: "", updatedAt: "" },
-  u3: { id: "u3", name: "Carol Smith", email: "carol@example.com", avatarUrl: null, bio: null, role: "member", teamIds: ["t1"], createdAt: "", updatedAt: "" },
+  u1: { id: "u1", name: "Alice Chen", email: "alice@example.com", avatar: null },
+  u2: { id: "u2", name: "Bob Park", email: "bob@example.com", avatar: null },
+  u3: { id: "u3", name: "Carol Smith", email: "carol@example.com", avatar: null },
 };
 
 const MOCK_TAGS: Record<string, Tag> = {
-  tg1: { id: "tg1", name: "Design", color: "#8B5CF6", createdAt: "" },
-  tg2: { id: "tg2", name: "Engineering", color: "#3B82F6", createdAt: "" },
-  tg3: { id: "tg3", name: "Bug", color: "#EF4444", createdAt: "" },
-  tg4: { id: "tg4", name: "Feature", color: "#10B981", createdAt: "" },
+  tg1: { id: "tg1", name: "Design", color: "#8B5CF6" },
+  tg2: { id: "tg2", name: "Engineering", color: "#3B82F6" },
+  tg3: { id: "tg3", name: "Bug", color: "#EF4444" },
+  tg4: { id: "tg4", name: "Feature", color: "#10B981" },
 };
 
-function makeTask(overrides: Partial<Task> & { id: string; name: string; sectionId: string }): Task {
+function makeTask(overrides: Partial<Task> & { id: string; title: string; sectionId: string }): Task {
   return {
     description: null,
     htmlDescription: null,
     status: "not_started",
     priority: "none",
-    type: "task",
+    taskType: "task",
     completed: false,
+    isTemplate: false,
     completedAt: null,
     assigneeId: null,
+    creatorId: "u1",
     projectId: "p1",
     parentTaskId: null,
-    order: 0,
+    position: 0,
     dueDate: null,
     startDate: null,
     estimatedMinutes: null,
@@ -64,7 +66,7 @@ function makeTask(overrides: Partial<Task> & { id: string; name: string; section
     dependencyIds: [],
     approvalStatus: null,
     approverIds: [],
-    likes: 0,
+    likes: [],
     attachmentCount: 0,
     commentCount: 0,
     customFieldValues: [],
@@ -75,21 +77,21 @@ function makeTask(overrides: Partial<Task> & { id: string; name: string; section
 }
 
 const MOCK_SECTIONS: Section[] = [
-  { id: "s1", name: "To Do", projectId: "p1", order: 0, taskIds: ["t1", "t2", "t3"], createdAt: "" },
-  { id: "s2", name: "In Progress", projectId: "p1", order: 1, taskIds: ["t4", "t5"], createdAt: "" },
-  { id: "s3", name: "In Review", projectId: "p1", order: 2, taskIds: ["t6"], createdAt: "" },
-  { id: "s4", name: "Done", projectId: "p1", order: 3, taskIds: ["t7", "t8"], createdAt: "" },
+  { id: "s1", name: "To Do", projectId: "p1", position: 0, taskIds: ["t1", "t2", "t3"], createdAt: "" },
+  { id: "s2", name: "In Progress", projectId: "p1", position: 1, taskIds: ["t4", "t5"], createdAt: "" },
+  { id: "s3", name: "In Review", projectId: "p1", position: 2, taskIds: ["t6"], createdAt: "" },
+  { id: "s4", name: "Done", projectId: "p1", position: 3, taskIds: ["t7", "t8"], createdAt: "" },
 ];
 
 const MOCK_TASKS: Task[] = [
-  makeTask({ id: "t1", name: "Design new landing page", sectionId: "s1", priority: "high", assigneeId: "u1", dueDate: "2026-04-10", tagIds: ["tg1"], subtaskIds: ["st1", "st2"], order: 0 }),
-  makeTask({ id: "t2", name: "Set up CI/CD pipeline", sectionId: "s1", priority: "medium", assigneeId: "u2", tagIds: ["tg2"], order: 1 }),
-  makeTask({ id: "t3", name: "Write API documentation", sectionId: "s1", priority: "low", dueDate: "2026-04-15", tagIds: ["tg2"], order: 2 }),
-  makeTask({ id: "t4", name: "Implement auth flow", sectionId: "s2", priority: "high", assigneeId: "u2", dueDate: "2026-04-05", tagIds: ["tg2", "tg4"], subtaskIds: ["st3"], order: 0 }),
-  makeTask({ id: "t5", name: "Create onboarding screens", sectionId: "s2", priority: "medium", assigneeId: "u1", dueDate: "2026-04-08", tagIds: ["tg1"], order: 1 }),
-  makeTask({ id: "t6", name: "Fix navigation bug", sectionId: "s3", priority: "high", assigneeId: "u3", tagIds: ["tg3"], order: 0 }),
-  makeTask({ id: "t7", name: "Database schema v2", sectionId: "s4", priority: "none", assigneeId: "u2", completed: true, completedAt: "2026-03-28", order: 0 }),
-  makeTask({ id: "t8", name: "Project kickoff meeting", sectionId: "s4", priority: "none", type: "milestone", completed: true, completedAt: "2026-03-20", order: 1 }),
+  makeTask({ id: "t1", title: "Design new landing page", sectionId: "s1", priority: "high", assigneeId: "u1", dueDate: "2026-04-10", tagIds: ["tg1"], subtaskIds: ["st1", "st2"], position: 0 } as any),
+  makeTask({ id: "t2", title: "Set up CI/CD pipeline", sectionId: "s1", priority: "medium", assigneeId: "u2", tagIds: ["tg2"], position: 1 } as any),
+  makeTask({ id: "t3", title: "Write API documentation", sectionId: "s1", priority: "low", dueDate: "2026-04-15", tagIds: ["tg2"], position: 2 } as any),
+  makeTask({ id: "t4", title: "Implement auth flow", sectionId: "s2", priority: "high", assigneeId: "u2", dueDate: "2026-04-05", tagIds: ["tg2", "tg4"], subtaskIds: ["st3"], position: 0 } as any),
+  makeTask({ id: "t5", title: "Create onboarding screens", sectionId: "s2", priority: "medium", assigneeId: "u1", dueDate: "2026-04-08", tagIds: ["tg1"], position: 1 } as any),
+  makeTask({ id: "t6", title: "Fix navigation bug", sectionId: "s3", priority: "high", assigneeId: "u3", tagIds: ["tg3"], position: 0 } as any),
+  makeTask({ id: "t7", title: "Database schema v2", sectionId: "s4", priority: "none", assigneeId: "u2", completed: true, completedAt: "2026-03-28", position: 0 } as any),
+  makeTask({ id: "t8", title: "Project kickoff meeting", sectionId: "s4", priority: "none", taskType: "milestone", completed: true, completedAt: "2026-03-20", position: 1 } as any),
 ];
 
 // ---------------------------------------------------------------------------
@@ -143,7 +145,7 @@ export function BoardView({
       }
     }
     for (const key of Object.keys(map)) {
-      map[key].sort((a, b) => a.order - b.order);
+      map[key].sort((a, b) => a.position - b.position);
     }
     return map;
   }, [sections, tasks]);
@@ -178,13 +180,13 @@ export function BoardView({
         destinationSectionId = overSection.id;
       } else {
         const overTask = tasks.find((t) => t.id === overId);
-        if (overTask) destinationSectionId = overTask.sectionId;
+        if (overTask) destinationSectionId = overTask.sectionId || null;
       }
 
       if (destinationSectionId && draggedTask.sectionId !== destinationSectionId) {
         setTasks((prev) =>
           prev.map((t) =>
-            t.id === activeId ? { ...t, sectionId: destinationSectionId! } : t
+            t.id === activeId ? ({ ...t, sectionId: destinationSectionId || null } as any) : t
           )
         );
       }
@@ -209,7 +211,7 @@ export function BoardView({
 
         const sectionTasks = prev
           .filter((t) => t.sectionId === movedTask.sectionId)
-          .sort((a, b) => a.order - b.order);
+          .sort((a, b) => a.position - b.position);
 
         const oldIndex = sectionTasks.findIndex((t) => t.id === activeId);
         const newIndex = sectionTasks.findIndex((t) => t.id === overId);
@@ -222,7 +224,7 @@ export function BoardView({
         return prev.map((t) => {
           if (reorderedIds.has(t.id)) {
             const idx = reordered.findIndex((r) => r.id === t.id);
-            return { ...t, order: idx };
+            return { ...t, position: idx };
           }
           return t;
         });
@@ -288,7 +290,7 @@ export function BoardView({
             <BoardCard
               task={activeTask}
               assignee={activeTask.assigneeId ? users[activeTask.assigneeId] : null}
-              tags={activeTask.tagIds.map((id) => tags[id]).filter(Boolean)}
+              tags={((activeTask as any).tagIds || []).map((id: string) => tags[id]).filter(Boolean)}
             />
           </div>
         ) : null}

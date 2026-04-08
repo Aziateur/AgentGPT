@@ -42,7 +42,7 @@ const priorityLabel: Record<TaskPriority, string> = {
   high: "High",
 };
 
-function dueDateColor(dueDate: string | null): string {
+function dueDateColor(dueDate: string | null | undefined): string {
   if (!dueDate) return "text-gray-500";
   const d = new Date(dueDate);
   if (isBefore(d, startOfDay(new Date())) && !isToday(d)) return "text-red-600";
@@ -120,18 +120,19 @@ export function TaskRow({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") commitTitle();
     if (e.key === "Escape") {
-      setEditValue(task.name);
+      setEditValue(taskName);
       setIsEditing(false);
     }
   };
 
   // Build custom field value display
   const customFieldCells = customFieldDefs.map((def) => {
-    const cfv = (task.customValues || (task as Record<string, unknown>).customFieldValues as Array<Record<string, unknown>> || []).find((v: Record<string, unknown>) => v.fieldId === def.id);
+    const cfvList = task.customValues || (task as Record<string, unknown>).customFieldValues as Array<Record<string, unknown>> || [];
+    const cfv = cfvList.find((v: any) => v.fieldId === def.id) as any;
     let display = "---";
     if (cfv) {
       if (cfv.stringValue) display = cfv.stringValue;
-      else if (cfv.numberValue !== null) display = String(cfv.numberValue);
+      else if (cfv.numberValue !== null && cfv.numberValue !== undefined) display = String(cfv.numberValue);
       else if (cfv.dateValue) display = formatDate(cfv.dateValue);
       else if (cfv.selectedOptions?.length) display = cfv.selectedOptions.join(", ");
     }
@@ -270,7 +271,7 @@ export function TaskRow({
           <Tooltip content={assignee.name}>
             <Avatar
               size="xs"
-              src={assignee.avatarUrl || undefined}
+              src={assignee.avatar as string | undefined}
               name={assignee.name}
             />
           </Tooltip>

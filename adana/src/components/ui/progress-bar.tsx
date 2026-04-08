@@ -39,7 +39,7 @@ const progressSizeVariants = cva(
 );
 
 export interface ProgressBarProps
-  extends React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root>,
+  extends Omit<React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root>, "color">,
     VariantProps<typeof progressBarVariants>,
     VariantProps<typeof progressSizeVariants> {
   value?: number;

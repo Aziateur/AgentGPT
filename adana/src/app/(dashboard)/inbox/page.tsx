@@ -6,7 +6,7 @@ import type { Notification } from "@/types";
 
 // -- Helpers ------------------------------------------------------------------
 
-function timeAgo(iso: string) {
+function timeAgo(iso: string | Date) {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 60) return `${mins}m ago`;

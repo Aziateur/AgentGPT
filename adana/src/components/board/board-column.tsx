@@ -164,7 +164,7 @@ export function BoardColumn({
                 key={task.id}
                 task={task}
                 assignee={task.assigneeId ? users[task.assigneeId] : null}
-                tags={task.tagIds.map((id) => tags[id]).filter(Boolean)}
+                tags={((task as any).tagIds || []).map((id: string) => tags[id]).filter(Boolean)}
                 onClick={onTaskClick}
               />
             ))}

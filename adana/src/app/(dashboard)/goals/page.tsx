@@ -16,7 +16,7 @@ interface GoalData {
   ownerId: string;
   owner: { id: string; name: string; avatar: string | null };
   parentId: string | null;
-  subGoals: GoalData[];
+  subGoals?: GoalData[];
   _count?: { projects: number; subGoals: number };
 }
 

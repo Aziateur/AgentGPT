@@ -81,7 +81,7 @@ export function BoardCard({ task, assignee, tags = [], onClick, className }: Boa
       className={cn(
         "group relative cursor-pointer rounded-lg border border-gray-200 bg-white p-3 shadow-sm",
         "border-l-[3px]",
-        priorityBorderColor[task.priority],
+        priorityBorderColor[(task.priority as TaskPriority) || "none"],
         "hover:shadow-md transition-shadow",
         isDragging && "opacity-50 shadow-lg ring-2 ring-indigo-300",
         className
@@ -105,13 +105,13 @@ export function BoardCard({ task, assignee, tags = [], onClick, className }: Boa
           task.completed && "line-through text-gray-400"
         )}
       >
-        {task.type === "milestone" && (
+        {task.taskType === "milestone" && (
           <Milestone className="mr-1 inline h-3.5 w-3.5 text-amber-500" />
         )}
-        {task.type === "approval" && (
+        {task.taskType === "approval" && (
           <ShieldCheck className="mr-1 inline h-3.5 w-3.5 text-purple-500" />
         )}
-        {task.name}
+        {task.title}
       </p>
 
       {/* Meta row */}
@@ -136,11 +136,10 @@ export function BoardCard({ task, assignee, tags = [], onClick, className }: Boa
             </Tooltip>
           )}
 
-          {/* Subtask count */}
-          {task.subtaskIds.length > 0 && (
+          {task.subtasks && task.subtasks.length > 0 && (
             <span className="inline-flex items-center gap-0.5 text-[11px] text-gray-400">
               <CheckSquare className="h-3 w-3" />
-              {task.subtaskIds.length}
+              {task.subtasks.length}
             </span>
           )}
 
@@ -169,7 +168,7 @@ export function BoardCard({ task, assignee, tags = [], onClick, className }: Boa
               <Avatar
                 size="xs"
                 name={assignee.name}
-                src={assignee.avatarUrl ?? undefined}
+                src={assignee.avatar || undefined}
               />
             </span>
           </Tooltip>

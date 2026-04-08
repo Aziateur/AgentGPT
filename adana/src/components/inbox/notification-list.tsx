@@ -20,39 +20,39 @@ import type { Notification, NotificationType } from "@/types";
 
 const mockNotifications: Notification[] = [
   {
-    id: "n1", userId: "demo-user", recipientId: "demo-user", type: "task_assigned",
+    id: "n1", userId: "demo-user", type: "task_assigned",
     title: "New task assigned", message: 'Sarah assigned you "Design homepage wireframes"',
-    read: false, taskId: "t1", projectId: "p1", actorId: "user-2", targetUrl: null,
+    read: false, archived: false, linkUrl: null,
     createdAt: new Date(Date.now() - 1800000).toISOString(),
   },
   {
-    id: "n2", userId: "demo-user", recipientId: "demo-user", type: "comment_added",
+    id: "n2", userId: "demo-user", type: "comment_added",
     title: "New comment", message: 'Alex commented on "API Integration": "Looks good, but we need to handle edge cases."',
-    read: false, taskId: "t2", projectId: "p2", actorId: "user-3", targetUrl: null,
+    read: false, archived: false, linkUrl: null,
     createdAt: new Date(Date.now() - 3600000).toISOString(),
   },
   {
-    id: "n3", userId: "demo-user", recipientId: "demo-user", type: "task_completed",
+    id: "n3", userId: "demo-user", type: "task_completed",
     title: "Task completed", message: 'Jordan completed "Set up staging environment"',
-    read: true, taskId: "t3", projectId: "p1", actorId: "user-4", targetUrl: null,
+    read: true, archived: false, linkUrl: null,
     createdAt: new Date(Date.now() - 7200000).toISOString(),
   },
   {
-    id: "n4", userId: "demo-user", recipientId: "demo-user", type: "due_date_approaching",
+    id: "n4", userId: "demo-user", type: "due_date_approaching",
     title: "Due date approaching", message: '"Write API documentation" is due tomorrow',
-    read: false, taskId: "t3", projectId: "p1", actorId: null, targetUrl: null,
+    read: false, archived: false, linkUrl: null,
     createdAt: new Date(Date.now() - 14400000).toISOString(),
   },
   {
-    id: "n5", userId: "demo-user", recipientId: "demo-user", type: "mention",
+    id: "n5", userId: "demo-user", type: "mention",
     title: "You were mentioned", message: 'Alex mentioned you in "Sprint Planning Notes"',
-    read: true, taskId: "t4", projectId: "p1", actorId: "user-3", targetUrl: null,
+    read: true, archived: false, linkUrl: null,
     createdAt: new Date(Date.now() - 86400000).toISOString(),
   },
   {
-    id: "n6", userId: "demo-user", recipientId: "demo-user", type: "approval_request",
+    id: "n6", userId: "demo-user", type: "approval_request",
     title: "Approval requested", message: 'Jordan requested your approval on "Deploy to production"',
-    read: false, taskId: "t5", projectId: "p2", actorId: "user-4", targetUrl: null,
+    read: false, archived: false, linkUrl: null,
     createdAt: new Date(Date.now() - 43200000).toISOString(),
   },
 ];
@@ -75,7 +75,7 @@ const typeConfig: Record<string, { icon: typeof CheckCircle2; color: string }> =
   goal_update: { icon: TrendingUp, color: "bg-green-100 text-green-600" },
 };
 
-function timeAgo(iso: string) {
+function timeAgo(iso: string | Date) {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 60) return `${mins}m ago`;
@@ -132,7 +132,7 @@ export function NotificationList({ className }: NotificationListProps) {
   }
 
   function archive(id: string) {
-    setArchivedIds((prev) => new Set([...prev, id]));
+    setArchivedIds((prev) => new Set([...Array.from(prev), id]));
   }
 
   if (visible.length === 0) {

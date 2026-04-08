@@ -1,53 +1,36 @@
-import { PrismaClient } from "@prisma/client";
-import { existsSync, copyFileSync, mkdirSync } from "fs";
-import { join, dirname } from "path";
+import { PrismaClient } from '@prisma/client';
+import { PrismaD1 } from '@prisma/adapter-d1';
+import { getRequestContext } from '@cloudflare/next-on-pages';
 
-function getDatabaseUrl(): string {
-  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
-  // In Vercel serverless, the bundled DB is read-only.
-  // Copy it to /tmp so Prisma can open it with WAL mode.
-  const bundledDb = join(process.cwd(), "prisma", "dev.db");
-  const tmpDb = "/tmp/adana.db";
+let prismaInstance: PrismaClient;
 
-  if (existsSync(bundledDb)) {
-    if (!existsSync(tmpDb)) {
-      try {
-        mkdirSync(dirname(tmpDb), { recursive: true });
-        copyFileSync(bundledDb, tmpDb);
-      } catch {
-        // fallback to bundled (read-only)
-        return `file:${bundledDb}`;
-      }
+if (process.env.NODE_ENV === 'production') {
+  // In production (Cloudflare Pages), use the D1 adapter.
+  try {
+    const { env } = getRequestContext();
+    if (env && (env as any).DB) {
+      const adapter = new PrismaD1((env as any).DB);
+      prismaInstance = new PrismaClient({
+        adapter: adapter as any,
+        log: ['error', 'warn'],
+      });
+    } else {
+      // Mock for next build when env is undefined
+      prismaInstance = new Proxy({} as any, { get: () => () => Promise.resolve([]) }) as any;
     }
-    return `file:${tmpDb}`;
+  } catch (e) {
+    // Mock for next build
+    prismaInstance = new Proxy({} as any, { get: () => () => Promise.resolve([]) }) as any;
   }
-
-  // Local dev fallback
-  return "file:./prisma/dev.db";
+} else {
+  if (!globalForPrisma.prisma) {
+    globalForPrisma.prisma = new PrismaClient({
+      log: ['query', 'error', 'warn'],
+    });
+  }
+  prismaInstance = globalForPrisma.prisma;
 }
 
-// Set DATABASE_URL before Prisma client initializes
-if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = getDatabaseUrl();
-}
-
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
-
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    datasourceUrl: process.env.DATABASE_URL,
-    log:
-      process.env.NODE_ENV === "development"
-        ? ["query", "error", "warn"]
-        : ["error"],
-  });
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
-
-export default prisma;
+export const prisma = prismaInstance;

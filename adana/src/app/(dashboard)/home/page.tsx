@@ -52,7 +52,11 @@ export default async function HomePage() {
       if (Array.isArray(fetchedTasks)) {
         tasks = fetchedTasks;
       } else if (typeof fetchedTasks === "object" && fetchedTasks !== null) {
-        const grouped = fetchedTasks as { today?: unknown[]; upcoming?: unknown[]; later?: unknown[] };
+        const grouped = fetchedTasks as { 
+          today?: Record<string, unknown>[]; 
+          upcoming?: Record<string, unknown>[]; 
+          later?: Record<string, unknown>[] 
+        };
         tasks = [
           ...(grouped.today || []),
           ...(grouped.upcoming || []),
@@ -140,9 +144,9 @@ export default async function HomePage() {
                     {String(task.priority)}
                   </span>
                 ) : null}
-                {task.dueDate && (
+                {task.dueDate ? (
                   <span className="shrink-0 text-xs text-gray-500">{formatDate(task.dueDate as string)}</span>
-                )}
+                ) : null}
               </li>
             ))}
           </ul>

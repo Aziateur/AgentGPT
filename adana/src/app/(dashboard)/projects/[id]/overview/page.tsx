@@ -74,7 +74,7 @@ export default async function ProjectOverviewPage({
   // Compute real stats
   const totalTasks = allTasks.length;
   const completedTasks = allTasks.filter((t: { completed: boolean }) => t.completed).length;
-  const overdueTasks = allTasks.filter((t: { completed: boolean; dueDate?: string | null }) => {
+  const overdueTasks = allTasks.filter((t: { completed: boolean; dueDate?: string | Date | null }) => {
     if (t.completed || !t.dueDate) return false;
     return new Date(t.dueDate) < new Date();
   }).length;
@@ -194,7 +194,7 @@ export default async function ProjectOverviewPage({
                 </div>
               ) : (
                 <ul className="divide-y divide-gray-100">
-                  {milestoneTasks.map((m: { id: string; title: string; completed: boolean; dueDate?: string | null }) => (
+                  {milestoneTasks.map((m: { id: string; title: string; completed: boolean; dueDate?: string | Date | null }) => (
                     <li key={m.id} className="flex items-center gap-3 px-5 py-3">
                       <div
                         className={`flex h-5 w-5 items-center justify-center rounded-full ${
