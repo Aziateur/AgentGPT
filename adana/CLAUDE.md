@@ -24,6 +24,7 @@ To prevent overlap and ensure maximum efficiency, responsibilities are split as 
 ## 4. Core Architectural Rules (UI & Build)
 * **Static Export Constraint:** Adana is generating statically for Cloudflare Pages. Do NOT re-introduce Server Actions (`"use server"`) or runtime Node API routes without explicit permission, as this will break `next build`.
 * **Client Components:** Pages utilizing dynamic routing with `generateStaticParams` must be standard Server Components. They should fetch parameters and pass them natively down to separated Client Components.
+* **Direct to Production:** All code changes and pushes must go directly to production (the `main` branch). Do not use staging or preview branches. Since I am the only user, the data is safe even if we break something.
 
 ## 5. Agent Handoff Protocol
 * **Surgical Edits:** Avoid replacing entire files when possible. Use targeted modifications instead, as another agent may have recently applied minute bug fixes.
