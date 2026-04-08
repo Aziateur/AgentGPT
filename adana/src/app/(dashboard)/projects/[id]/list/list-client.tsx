@@ -81,24 +81,15 @@ export function ProjectListClient({
   }
 
   const reloadTasks = useCallback(async () => {
-    try {
-      const { getTasks } = await import("@/app/actions/task-actions");
-      const fresh = await getTasks(projectId);
-      if (fresh) setTasks(JSON.parse(JSON.stringify(fresh)));
-    } catch {
-      // ignore
-    }
+    // client-side do nothing for demo
   }, [projectId]);
 
   const loadTaskDetail = useCallback(async (taskId: string) => {
-    try {
-      const { getTask } = await import("@/app/actions/task-actions");
-      const task = await getTask(taskId);
-      if (task) setSelectedTask(JSON.parse(JSON.stringify(task)));
-    } catch {
-      // ignore
-    }
-  }, []);
+    // client-side do nothing for demo
+    // We already have task detail in `selectedTask` mostly
+    const task = tasks.find(t => t.id === taskId);
+    if (task) setSelectedTask(task);
+  }, [tasks]);
 
   async function handleTaskClick(taskId: string) {
     setSelectedTaskId(taskId);
@@ -106,127 +97,77 @@ export function ProjectListClient({
   }
 
   async function handleToggleComplete(taskId: string) {
-    try {
-      const { toggleComplete } = await import("@/app/actions/task-actions");
-      await toggleComplete(taskId);
-      reloadTasks();
-      if (selectedTaskId === taskId) loadTaskDetail(taskId);
-    } catch {
-      // ignore
+    setTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, completed: !t.completed } : t))
+    );
+    if (selectedTask?.id === taskId) {
+      setSelectedTask((prev) => (prev ? { ...prev, completed: !prev.completed } : null));
     }
   }
 
   async function handleUpdateTask(taskId: string, updates: Partial<Task>) {
-    try {
-      const { updateTask } = await import("@/app/actions/task-actions");
-      await updateTask(taskId, updates as Parameters<typeof updateTask>[1]);
-      reloadTasks();
-      if (selectedTaskId === taskId) loadTaskDetail(taskId);
-    } catch {
-      // ignore
+    setTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, ...updates } : t))
+    );
+    if (selectedTask?.id === taskId) {
+      setSelectedTask((prev) => (prev ? { ...prev, ...updates } : null));
     }
   }
 
   async function handleDeleteTask(taskId: string) {
-    try {
-      const { deleteTask } = await import("@/app/actions/task-actions");
-      await deleteTask(taskId);
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    if (selectedTaskId === taskId) {
       setSelectedTaskId(null);
       setSelectedTask(null);
-      reloadTasks();
-    } catch {
-      // ignore
     }
   }
 
   async function handleDuplicateTask(taskId: string) {
-    try {
-      const { duplicateTask } = await import("@/app/actions/task-actions");
-      await duplicateTask(taskId);
-      reloadTasks();
-    } catch {
-      // ignore
-    }
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    const newTask = { ...task, id: `task-${Date.now()}`, title: `${task.title} (Copy)` };
+    setTasks((prev) => [...prev, newTask]);
   }
 
   async function handleAddComment(taskId: string, text: string) {
-    try {
-      const { addComment } = await import("@/app/actions/comment-actions");
-      await addComment(taskId, text);
-      loadTaskDetail(taskId);
-    } catch {
-      // ignore
-    }
+    // mock
   }
 
   async function handleAddSubtask(parentId: string, title: string) {
-    try {
-      const { addSubtask } = await import("@/app/actions/task-actions");
-      await addSubtask(parentId, { title });
-      loadTaskDetail(parentId);
-      reloadTasks();
-    } catch {
-      // ignore
-    }
+    // mock
   }
 
   async function handleToggleSubtaskComplete(subtaskId: string) {
-    try {
-      const { toggleComplete } = await import("@/app/actions/task-actions");
-      await toggleComplete(subtaskId);
-      if (selectedTaskId) loadTaskDetail(selectedTaskId);
-    } catch {
-      // ignore
-    }
+    // mock
   }
 
   async function handleToggleLike(taskId: string) {
-    try {
-      const { toggleTaskLike } = await import("@/app/actions/comment-actions");
-      await toggleTaskLike(taskId);
-      loadTaskDetail(taskId);
-    } catch {
-      // ignore
-    }
+    // mock
   }
 
   async function handleToggleFollow(taskId: string) {
-    try {
-      const { toggleFollowTask } = await import("@/app/actions/comment-actions");
-      await toggleFollowTask(taskId);
-      loadTaskDetail(taskId);
-    } catch {
-      // ignore
-    }
+    // mock
   }
 
   async function handleSetApprovalStatus(taskId: string, status: string) {
-    try {
-      const { setApprovalStatus } = await import("@/app/actions/task-actions");
-      await setApprovalStatus(taskId, status as "pending" | "approved" | "changes_requested" | "rejected");
-      loadTaskDetail(taskId);
-      reloadTasks();
-    } catch {
-      // ignore
-    }
+    // mock
   }
 
   async function handleCreateTask(data: { name: string; description: string; assigneeId: string | null; dueDate: string | null; priority: string; sectionId: string | null; tagIds: string[] }) {
-    try {
-      const { createTask } = await import("@/app/actions/task-actions");
-      await createTask({
-        title: data.name,
-        description: data.description || undefined,
-        projectId,
-        sectionId: data.sectionId || undefined,
-        assigneeId: data.assigneeId || undefined,
-        dueDate: data.dueDate || undefined,
-        priority: data.priority || undefined,
-      });
-      reloadTasks();
-    } catch {
-      // ignore
-    }
+    const newTask = {
+      id: `task-${Date.now()}`,
+      title: data.name,
+      description: data.description,
+      dueDate: data.dueDate,
+      priority: data.priority,
+      sectionId: data.sectionId,
+      completed: false,
+      position: tasks.length + 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      projectId,
+    } as any;
+    setTasks((prev) => [...prev, newTask]);
   }
 
   function renderTaskRow(task: Task) {

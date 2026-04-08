@@ -1,43 +1,21 @@
-import { getSections } from "@/app/actions/section-actions";
-import { getTasks } from "@/app/actions/task-actions";
+import { getSectionsForProject, getTasksForProject, PROJECT_IDS } from "@/lib/mock-data";
 import { TimelinePageClient } from "./timeline-client";
 
-export default async function ProjectTimelinePage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
+export function generateStaticParams() {
+  return PROJECT_IDS.map((id) => ({ id }));
+}
 
-  const [sections, tasks] = await Promise.all([
-    getSections(id),
-    getTasks(id),
-  ]);
-
-  // Also fetch dependencies for all tasks in this project
-  let dependencies: { id: string; blockedTaskId: string; blockingTaskId: string }[] = [];
-  try {
-    const { prisma } = await import("@/lib/prisma");
-    dependencies = await prisma.dependency.findMany({
-      where: {
-        blockedTask: { projectId: id },
-      },
-      select: {
-        id: true,
-        blockedTaskId: true,
-        blockingTaskId: true,
-      },
-    });
-  } catch {
-    // ignore
-  }
+export default function ProjectTimelinePage({ params }: { params: { id: string } }) {
+  const sections = getSectionsForProject(params.id);
+  const tasks = getTasksForProject(params.id);
+  const dependencies: { id: string; blockedTaskId: string; blockingTaskId: string }[] = [];
 
   return (
     <TimelinePageClient
-      projectId={id}
-      initialSections={JSON.parse(JSON.stringify(sections))}
-      initialTasks={JSON.parse(JSON.stringify(tasks))}
-      initialDependencies={JSON.parse(JSON.stringify(dependencies))}
+      projectId={params.id}
+      initialSections={sections}
+      initialTasks={tasks as any}
+      initialDependencies={dependencies}
     />
   );
 }

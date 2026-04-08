@@ -1,0 +1,82 @@
+  ▲ Next.js 14.2.18
+  - Environments: .env
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Skipping validation of types
+   Skipping linting
+   Collecting page data ...
+   Generating static pages (0/33) ...
+(node:4027) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4022) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4029) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4026) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4030) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4028) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4024) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4023) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+   Generating static pages (8/33) 
+(node:4025) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+   Generating static pages (16/33) 
+   Generating static pages (24/33) 
+ ✓ Generating static pages (33/33)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    465 B          87.7 kB
+├ ○ /_not-found                          141 B          87.4 kB
+├ ○ /goals                               4.67 kB        91.9 kB
+├ ○ /home                                3.97 kB          98 kB
+├ ○ /inbox                               4.31 kB        98.3 kB
+├ ○ /login                               2.93 kB          97 kB
+├ ○ /my-tasks                            4.34 kB        91.6 kB
+├ ○ /portfolios                          4.06 kB        91.3 kB
+├ ○ /projects                            4.47 kB        98.5 kB
+├ ● /projects/[id]                       488 B          87.7 kB
+├   ├ /projects/proj-1
+├   ├ /projects/proj-2
+├   └ /projects/proj-3
+├ ● /projects/[id]/board                 2.67 kB        96.7 kB
+├   ├ /projects/proj-1/board
+├   ├ /projects/proj-2/board
+├   └ /projects/proj-3/board
+├ ● /projects/[id]/calendar              1.7 kB         95.7 kB
+├   ├ /projects/proj-1/calendar
+├   ├ /projects/proj-2/calendar
+├   └ /projects/proj-3/calendar
+├ ● /projects/[id]/list                  41.1 kB         179 kB
+├   ├ /projects/proj-1/list
+├   ├ /projects/proj-2/list
+├   └ /projects/proj-3/list
+├ ● /projects/[id]/overview              178 B          94.2 kB
+├   ├ /projects/proj-1/overview
+├   ├ /projects/proj-2/overview
+├   └ /projects/proj-3/overview
+├ ● /projects/[id]/timeline              2.02 kB          96 kB
+├   ├ /projects/proj-1/timeline
+├   ├ /projects/proj-2/timeline
+├   └ /projects/proj-3/timeline
+├ ○ /register                            3.23 kB        97.3 kB
+├ ○ /reporting                           3.9 kB         91.1 kB
+├ ○ /search                              5.24 kB        92.5 kB
+└ ○ /teams                               5.31 kB        92.5 kB
++ First Load JS shared by all            87.2 kB
+  ├ chunks/117-ff541f78b4be922c.js       31.7 kB
+  ├ chunks/fd9d1056-401aa0ba31484b00.js  53.7 kB
+  └ other shared chunks (total)          1.89 kB
+
+
+○  (Static)  prerendered as static content
+●  (SSG)     prerendered as static HTML (uses getStaticProps)
+
+EXIT_CODE=0

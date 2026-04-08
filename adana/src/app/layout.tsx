@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-export const runtime = 'edge';
-export const dynamic = 'force-dynamic';
-
 export const metadata: Metadata = {
   title: "Adana - Project Management",
   description:

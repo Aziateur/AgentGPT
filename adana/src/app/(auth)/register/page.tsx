@@ -18,24 +18,15 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
-    try {
-      const { register } = await import("@/app/actions/auth-actions");
-      const result = await register(name, email, password);
-      if (result?.error) {
-        setError(result.error);
-      } else {
-        window.location.href = "/home";
-      }
-    } catch {
-      setError("Registration failed. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    // Mock register for static demo
+    setTimeout(() => {
+      window.location.href = "/home";
+    }, 500);
   }
 
   const allRequirementsMet = passwordRequirements.every((r) => r.test(password));

@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createProject } from "@/app/actions/project-actions";
 
 // -- Helpers ------------------------------------------------------------------
 
@@ -95,22 +94,13 @@ export function ProjectsPageClient({ projects }: { projects: ProjectItem[] }) {
     { key: "complete", label: "Complete" },
   ];
 
-  async function handleCreateProject() {
+  function handleCreateProject() {
     if (!newProjectName.trim()) return;
-    startTransition(async () => {
-      const result = await createProject({
-        name: newProjectName.trim(),
-        description: newProjectDesc.trim() || undefined,
-        color: newProjectColor,
-      });
-      if (result && "project" in result && result.project) {
-        setShowCreateModal(false);
-        setNewProjectName("");
-        setNewProjectDesc("");
-        setNewProjectColor("#4f46e5");
-        router.refresh();
-      }
-    });
+    // Client-side only for demo
+    setShowCreateModal(false);
+    setNewProjectName("");
+    setNewProjectDesc("");
+    setNewProjectColor("#4f46e5");
   }
 
   return (

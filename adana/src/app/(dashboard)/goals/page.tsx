@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { mockGoals } from "@/lib/mock-data";
 
 // -- Types --------------------------------------------------------------------
 
@@ -188,51 +189,33 @@ export default function GoalsPage() {
   const [newStatus, setNewStatus] = useState("on_track");
   const [newPeriod, setNewPeriod] = useState("");
 
-  const loadGoals = useCallback(async () => {
-    try {
-      const { getGoals } = await import("@/app/actions/goal-actions");
-      const data = await getGoals();
-      setGoals(data as GoalData[]);
-    } catch {
-      // keep empty
-    } finally {
-      setLoading(false);
-    }
+  const loadGoals = useCallback(() => {
+    setGoals(mockGoals as GoalData[]);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
     loadGoals();
   }, [loadGoals]);
 
-  const handleCreate = async () => {
+  const handleCreate = () => {
     if (!newName.trim()) return;
-    const { createGoal } = await import("@/app/actions/goal-actions");
-    const result = await createGoal({
-      name: newName,
-      description: newDescription || undefined,
-      status: newStatus,
-      period: newPeriod || undefined,
-    });
-    if (!result.error) {
-      setNewName("");
-      setNewDescription("");
-      setNewStatus("on_track");
-      setNewPeriod("");
-      setShowCreateModal(false);
-      loadGoals();
-    }
+    // Client-side only for demo
+    setNewName("");
+    setNewDescription("");
+    setNewStatus("on_track");
+    setNewPeriod("");
+    setShowCreateModal(false);
   };
 
-  const handleDelete = async (id: string) => {
-    const { deleteGoal } = await import("@/app/actions/goal-actions");
-    await deleteGoal(id);
-    loadGoals();
+  const handleDelete = (id: string) => {
+    setGoals((prev) => prev.filter((g) => g.id !== id));
   };
 
-  const handleUpdateStatus = async (id: string, status: string) => {
-    const { updateGoal } = await import("@/app/actions/goal-actions");
-    await updateGoal(id, { status });
-    loadGoals();
+  const handleUpdateStatus = (id: string, status: string) => {
+    setGoals((prev) =>
+      prev.map((g) => (g.id === id ? { ...g, status } : g))
+    );
   };
 
   const filtered = goals.filter((g) => {

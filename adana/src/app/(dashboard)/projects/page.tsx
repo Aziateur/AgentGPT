@@ -1,9 +1,8 @@
-import { getProjects } from "@/app/actions/project-actions";
-import type { ProjectStatusType } from "@/types";
+"use client";
+
+import { mockProjects } from "@/lib/mock-data";
 import { ProjectsPageClient } from "./projects-client";
 
-export default async function ProjectsPage() {
-  const projects = await getProjects();
-
-  return <ProjectsPageClient projects={projects} />;
+export default function ProjectsPage() {
+  return <ProjectsPageClient projects={mockProjects} />;
 }

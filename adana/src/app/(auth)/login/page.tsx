@@ -11,24 +11,15 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
-    try {
-      const { login } = await import("@/app/actions/auth-actions");
-      const result = await login(email, password);
-      if (result?.error) {
-        setError(result.error);
-      } else {
-        window.location.href = "/home";
-      }
-    } catch {
-      setError("Invalid email or password. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    // Mock login for static demo
+    setTimeout(() => {
+      window.location.href = "/home";
+    }, 500);
   }
 
   return (

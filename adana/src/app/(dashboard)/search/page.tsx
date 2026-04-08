@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { mockTasks, mockProjects } from "@/lib/mock-data";
 import {
   Search as SearchIcon,
   FileText,
@@ -59,81 +60,46 @@ export default function SearchPage() {
 
   // Load saved searches on mount
   useEffect(() => {
-    async function loadSaved() {
-      try {
-        const { getSavedSearches } = await import("@/app/actions/search-actions");
-        const searches = await getSavedSearches();
-        if (searches) setSavedSearches(searches as SavedSearchItem[]);
-      } catch {
-        // ignore
-      }
-    }
-    loadSaved();
+    // No saved searches in demo mode
   }, []);
 
-  const doSearch = useCallback(async (searchQuery: string) => {
+  const doSearch = useCallback((searchQuery: string) => {
     if (!searchQuery.trim()) {
       setResults([]);
       return;
     }
 
     setLoading(true);
-    try {
-      const { globalSearch } = await import("@/app/actions/search-actions");
-      const data = await globalSearch(searchQuery);
+    const q = searchQuery.toLowerCase();
+    const mapped: SearchResult[] = [];
 
-      const mapped: SearchResult[] = [];
-
-      // Map tasks
-      if (data.tasks) {
-        for (const task of data.tasks as Array<Record<string, unknown>>) {
-          const project = task.project as { id?: string; name?: string } | null;
-          mapped.push({
-            id: task.id as string,
-            type: "task",
-            title: task.title as string,
-            subtitle: project ? `${project.name}` : "No project",
-            meta: task.priority ? `${task.priority} priority` : undefined,
-            href: project?.id
-              ? `/projects/${project.id}/list`
-              : "/my-tasks",
-          });
-        }
+    for (const task of mockTasks) {
+      if (task.title.toLowerCase().includes(q)) {
+        mapped.push({
+          id: task.id,
+          type: "task",
+          title: task.title,
+          subtitle: task.projectId,
+          meta: task.priority ? `${task.priority} priority` : undefined,
+          href: `/projects/${task.projectId}/list`,
+        });
       }
-
-      // Map projects
-      if (data.projects) {
-        for (const project of data.projects as Array<Record<string, unknown>>) {
-          const count = project._count as { tasks?: number; members?: number } | undefined;
-          mapped.push({
-            id: project.id as string,
-            type: "project",
-            title: project.name as string,
-            subtitle: `${count?.tasks ?? 0} tasks, ${count?.members ?? 0} members`,
-            href: `/projects/${project.id}/list`,
-          });
-        }
-      }
-
-      // Map users
-      if (data.users) {
-        for (const user of data.users as Array<Record<string, unknown>>) {
-          mapped.push({
-            id: user.id as string,
-            type: "person",
-            title: user.name as string,
-            subtitle: user.email as string,
-            href: "/teams",
-          });
-        }
-      }
-
-      setResults(mapped);
-    } catch {
-      setResults([]);
-    } finally {
-      setLoading(false);
     }
+
+    for (const project of mockProjects) {
+      if (project.name.toLowerCase().includes(q)) {
+        mapped.push({
+          id: project.id,
+          type: "project",
+          title: project.name,
+          subtitle: `${project._count.tasks} tasks, ${project._count.members} members`,
+          href: `/projects/${project.id}/list`,
+        });
+      }
+    }
+
+    setResults(mapped);
+    setLoading(false);
   }, []);
 
   // Debounced search
@@ -166,19 +132,9 @@ export default function SearchPage() {
     { key: "person", label: "People", count: tabCounts.person },
   ];
 
-  async function handleSaveSearch() {
+  function handleSaveSearch() {
     if (!query.trim()) return;
-    try {
-      const { saveSearch } = await import("@/app/actions/search-actions");
-      const result = await saveSearch(query, query, { query });
-      if (result && !("error" in result)) {
-        const { getSavedSearches } = await import("@/app/actions/search-actions");
-        const searches = await getSavedSearches();
-        if (searches) setSavedSearches(searches as SavedSearchItem[]);
-      }
-    } catch {
-      // ignore
-    }
+    // No-op for demo
   }
 
   function handleResultClick(result: SearchResult) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { mockTeams } from "@/lib/mock-data";
 import {
   Plus,
   Users,
@@ -52,48 +53,24 @@ export default function TeamsPage() {
   const [newDescription, setNewDescription] = useState("");
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
 
-  const loadTeams = useCallback(async () => {
-    try {
-      const { getTeams, getTeam } = await import("@/app/actions/team-actions");
-      const list = await getTeams();
-      // Load detail for each team to get members
-      const detailed = await Promise.all(
-        (list as TeamData[]).map(async (t) => {
-          const full = await getTeam(t.id);
-          return { ...t, members: full?.members || [] } as TeamData;
-        })
-      );
-      setTeams(detailed);
-    } catch {
-      // keep empty
-    } finally {
-      setLoading(false);
-    }
+  const loadTeams = useCallback(() => {
+    setTeams(mockTeams as unknown as TeamData[]);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
     loadTeams();
   }, [loadTeams]);
 
-  const handleCreate = async () => {
+  const handleCreate = () => {
     if (!newName.trim()) return;
-    const { createTeam } = await import("@/app/actions/team-actions");
-    const result = await createTeam({
-      name: newName,
-      description: newDescription || undefined,
-    });
-    if (!("error" in result)) {
-      setNewName("");
-      setNewDescription("");
-      setShowCreateModal(false);
-      loadTeams();
-    }
+    setNewName("");
+    setNewDescription("");
+    setShowCreateModal(false);
   };
 
-  const handleRemoveMember = async (teamId: string, userId: string) => {
-    const { removeTeamMember } = await import("@/app/actions/team-actions");
-    await removeTeamMember(teamId, userId);
-    loadTeams();
+  const handleRemoveMember = (teamId: string, userId: string) => {
+    // No-op for demo
   };
 
   const filtered = teams.filter(

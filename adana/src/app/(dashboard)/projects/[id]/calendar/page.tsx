@@ -1,19 +1,17 @@
-import { getTasks } from "@/app/actions/task-actions";
+import { getTasksForProject, PROJECT_IDS } from "@/lib/mock-data";
 import { CalendarPageClient } from "./calendar-client";
 
-export default async function ProjectCalendarPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
+export function generateStaticParams() {
+  return PROJECT_IDS.map((id) => ({ id }));
+}
 
-  const tasks = await getTasks(id);
+export default function ProjectCalendarPage({ params }: { params: { id: string } }) {
+  const tasks = getTasksForProject(params.id);
 
   return (
     <CalendarPageClient
-      projectId={id}
-      initialTasks={JSON.parse(JSON.stringify(tasks))}
+      projectId={params.id}
+      initialTasks={tasks as any}
     />
   );
 }

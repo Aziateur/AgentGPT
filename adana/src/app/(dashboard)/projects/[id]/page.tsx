@@ -1,22 +1,10 @@
-import { redirect } from "next/navigation";
-import { getProject } from "@/app/actions/project-actions";
+import { PROJECT_IDS } from "@/lib/mock-data";
+import { ProjectRedirectClient } from "./project-redirect-client";
 
-export default async function ProjectDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
+export function generateStaticParams() {
+  return PROJECT_IDS.map((id) => ({ id }));
+}
 
-  let defaultView = "list";
-  try {
-    const project = await getProject(id);
-    if (project?.defaultView) {
-      defaultView = project.defaultView;
-    }
-  } catch {
-    // fallback to list view
-  }
-
-  redirect(`/projects/${id}/${defaultView}`);
+export default function ProjectDetailPage({ params }: { params: { id: string } }) {
+  return <ProjectRedirectClient id={params.id} />;
 }

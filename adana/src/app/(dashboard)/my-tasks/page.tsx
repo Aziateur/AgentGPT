@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import type { Task } from "@/types";
+import { getMyTasks as getMockTasks, mockTasks } from "@/lib/mock-data";
 
 // -- Helpers ------------------------------------------------------------------
 
@@ -29,7 +29,6 @@ type TabKey = "today" | "upcoming" | "later";
 // -- Component ----------------------------------------------------------------
 
 export default function MyTasksPage() {
-  const router = useRouter();
   const [todayTasks, setTodayTasks] = useState<Task[]>([]);
   const [upcomingTasks, setUpcomingTasks] = useState<Task[]>([]);
   const [laterTasks, setLaterTasks] = useState<Task[]>([]);
@@ -39,20 +38,12 @@ export default function MyTasksPage() {
   const [newTaskName, setNewTaskName] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const loadTasks = useCallback(async () => {
-    try {
-      const { getMyTasks } = await import("@/app/actions/task-actions");
-      const result = await getMyTasks();
-      if (result) {
-        setTodayTasks(result.today as Task[] || []);
-        setUpcomingTasks(result.upcoming as Task[] || []);
-        setLaterTasks(result.later as Task[] || []);
-      }
-    } catch {
-      // keep empty
-    } finally {
-      setLoading(false);
-    }
+  const loadTasks = useCallback(() => {
+    const result = getMockTasks();
+    setTodayTasks(result.today as Task[]);
+    setUpcomingTasks(result.upcoming as Task[]);
+    setLaterTasks(result.later as Task[]);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -86,29 +77,18 @@ export default function MyTasksPage() {
     { key: "later", label: "Later", count: laterTasks.length },
   ];
 
-  async function handleAddTask() {
+  function handleAddTask() {
     if (!newTaskName.trim()) return;
-    try {
-      const { createTask } = await import("@/app/actions/task-actions");
-      const result = await createTask({ title: newTaskName.trim() });
-      if (result && !("error" in result)) {
-        setNewTaskName("");
-        setShowAddTask(false);
-        loadTasks();
-      }
-    } catch {
-      // ignore
-    }
+    // Client-side only for demo
+    setNewTaskName("");
+    setShowAddTask(false);
   }
 
-  async function handleToggleComplete(taskId: string) {
-    try {
-      const { toggleComplete } = await import("@/app/actions/task-actions");
-      await toggleComplete(taskId);
-      loadTasks();
-    } catch {
-      // ignore
-    }
+  function handleToggleComplete(taskId: string) {
+    // Client-side toggle for demo
+    setTodayTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, completed: !t.completed } : t));
+    setUpcomingTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, completed: !t.completed } : t));
+    setLaterTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, completed: !t.completed } : t));
   }
 
   if (loading) {

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import type { Notification } from "@/types";
+import { mockNotifications } from "@/lib/mock-data";
 
 // -- Helpers ------------------------------------------------------------------
 
@@ -57,16 +58,9 @@ export default function InboxPage() {
   const [filter, setFilter] = useState<FilterKey>("all");
   const [loading, setLoading] = useState(true);
 
-  const loadNotifications = useCallback(async () => {
-    try {
-      const { getNotifications } = await import("@/app/actions/notification-actions");
-      const fetched = await getNotifications();
-      if (fetched) setNotifications(fetched as Notification[]);
-    } catch {
-      // keep empty
-    } finally {
-      setLoading(false);
-    }
+  const loadNotifications = useCallback(() => {
+    setNotifications(mockNotifications as Notification[]);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -94,35 +88,16 @@ export default function InboxPage() {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: !n.read } : n))
     );
-    try {
-      const { markAsRead } = await import("@/app/actions/notification-actions");
-      await markAsRead(id);
-    } catch {
-      // revert on error
-      loadNotifications();
-    }
   }
 
-  async function markAllRead() {
+  function markAllRead() {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    try {
-      const { markAllAsRead } = await import("@/app/actions/notification-actions");
-      await markAllAsRead();
-    } catch {
-      loadNotifications();
-    }
   }
 
-  async function archive(id: string) {
+  function archive(id: string) {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, archived: true } : n))
     );
-    try {
-      const { archiveNotification } = await import("@/app/actions/notification-actions");
-      await archiveNotification(id);
-    } catch {
-      loadNotifications();
-    }
   }
 
   function getLinkHref(n: Notification) {

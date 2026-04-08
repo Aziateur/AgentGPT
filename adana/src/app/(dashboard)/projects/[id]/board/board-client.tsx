@@ -3,8 +3,6 @@
 import { useState, useTransition, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createTask, moveTask, toggleComplete } from "@/app/actions/task-actions";
-import { createSection } from "@/app/actions/section-actions";
 
 // ---------------------------------------------------------------------------
 // Types for DB-shaped data
@@ -129,35 +127,33 @@ export function BoardPageClient({
       setNewTaskName("");
       setAddingTaskInSection(null);
 
-      startTransition(async () => {
-        try {
-          await createTask({
-            title: name,
-            projectId,
-            sectionId,
-          });
-          router.refresh();
-        } catch {
-          // silently fail
-        }
-      });
+      // Client-side only for demo
+      const newTask: DbTask = {
+        id: `task-${Date.now()}`,
+        title: name,
+        completed: false,
+        priority: "none",
+        sectionId,
+        position: (tasksBySection[sectionId]?.length ?? 0) + 1,
+      };
+      setTasks((prev) => [...prev, newTask]);
     },
-    [newTaskName, projectId, router]
+    [newTaskName, tasksBySection]
   );
 
   const handleAddSection = useCallback(() => {
     const name = prompt("Section name:");
     if (!name?.trim()) return;
 
-    startTransition(async () => {
-      try {
-        await createSection(projectId, name.trim());
-        router.refresh();
-      } catch {
-        // silently fail
-      }
-    });
-  }, [projectId, router]);
+    // Client-side only for demo
+    const newSection: DbSection = {
+      id: `section-${Date.now()}`,
+      name: name.trim(),
+      position: sections.length + 1,
+      projectId,
+    };
+    setSections((prev) => [...prev, newSection]);
+  }, [projectId, sections.length]);
 
   // Simple HTML5 drag and drop for moving tasks between sections
   const handleDragStart = (taskId: string) => {
@@ -178,7 +174,7 @@ export function BoardPageClient({
       return;
     }
 
-    // Optimistic update
+    // Client-side only
     setTasks((prev) =>
       prev.map((t) =>
         t.id === draggedTaskId ? { ...t, sectionId } : t
@@ -186,34 +182,15 @@ export function BoardPageClient({
     );
     setDraggedTaskId(null);
     setDragOverSectionId(null);
-
-    startTransition(async () => {
-      try {
-        await moveTask(draggedTaskId, sectionId);
-        router.refresh();
-      } catch {
-        // revert on error
-        router.refresh();
-      }
-    });
   };
 
   const handleToggleComplete = (taskId: string) => {
-    // Optimistic update
+    // Client-side only
     setTasks((prev) =>
       prev.map((t) =>
         t.id === taskId ? { ...t, completed: !t.completed } : t
       )
     );
-
-    startTransition(async () => {
-      try {
-        await toggleComplete(taskId);
-        router.refresh();
-      } catch {
-        router.refresh();
-      }
-    });
   };
 
   return (
@@ -314,15 +291,18 @@ export function BoardPageClient({
                       {/* Tags */}
                       {task.tags && task.tags.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
-                          {task.tags.map((tt: { tag: { id: string; name: string; color: string } }) => (
-                            <span
-                              key={tt.tag.id}
-                              className="rounded px-1.5 py-0.5 text-[10px] font-medium text-white"
-                              style={{ backgroundColor: tt.tag.color }}
-                            >
-                              {tt.tag.name}
-                            </span>
-                          ))}
+                          {task.tags.map((tt: any) => {
+                            const tag = tt.tag || tt; // Fallback for raw tag object
+                            return (
+                              <span
+                                key={tag.id}
+                                className="rounded px-1.5 py-0.5 text-[10px] font-medium text-white"
+                                style={{ backgroundColor: tag.color }}
+                              >
+                                {tag.name}
+                              </span>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

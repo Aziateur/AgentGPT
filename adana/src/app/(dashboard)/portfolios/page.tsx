@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { ProjectStatusType } from "@/types";
+import { mockPortfolios } from "@/lib/mock-data";
 
 // -- Helpers ------------------------------------------------------------------
 
@@ -42,45 +43,21 @@ export default function PortfoliosPage() {
   const [newDescription, setNewDescription] = useState("");
   const [newColor, setNewColor] = useState("#4f46e5");
 
-  const loadPortfolios = useCallback(async () => {
-    try {
-      const { getPortfolios } = await import("@/app/actions/portfolio-actions");
-      const data = await getPortfolios();
-      // For each portfolio, load its detail to get projects
-      const { getPortfolio } = await import("@/app/actions/portfolio-actions");
-      const detailed = await Promise.all(
-        (data as PortfolioData[]).map(async (p) => {
-          const full = await getPortfolio(p.id);
-          return { ...p, projects: full?.projects || [] } as PortfolioData;
-        })
-      );
-      setPortfolios(detailed);
-    } catch {
-      // keep empty
-    } finally {
-      setLoading(false);
-    }
+  const loadPortfolios = useCallback(() => {
+    setPortfolios(mockPortfolios as unknown as PortfolioData[]);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
     loadPortfolios();
   }, [loadPortfolios]);
 
-  const handleCreate = async () => {
+  const handleCreate = () => {
     if (!newName.trim()) return;
-    const { createPortfolio } = await import("@/app/actions/portfolio-actions");
-    const result = await createPortfolio({
-      name: newName,
-      description: newDescription || undefined,
-      color: newColor,
-    });
-    if (!result.error) {
-      setNewName("");
-      setNewDescription("");
-      setNewColor("#4f46e5");
-      setShowCreateModal(false);
-      loadPortfolios();
-    }
+    setNewName("");
+    setNewDescription("");
+    setNewColor("#4f46e5");
+    setShowCreateModal(false);
   };
 
   if (loading) {

@@ -82,39 +82,29 @@ export default function ReportingPage() {
     new Map()
   );
 
-  const loadData = useCallback(async () => {
-    try {
-      const { getDashboardData } = await import(
-        "@/app/actions/reporting-actions"
-      );
-      const { getProjects } = await import("@/app/actions/project-actions");
-      const { getProjectStats } = await import(
-        "@/app/actions/reporting-actions"
-      );
-
-      const [dashData, projectList] = await Promise.all([
-        getDashboardData(),
-        getProjects(),
-      ]);
-
-      setDashboard(dashData as unknown as DashboardData);
-      const projs = (projectList || []) as unknown as ProjectForReport[];
-      setProjects(projs);
-
-      // Load stats for each project
-      const statsMap = new Map<string, ProjectStats>();
-      await Promise.all(
-        projs.slice(0, 10).map(async (p) => {
-          const stats = await getProjectStats(p.id);
-          statsMap.set(p.id, stats as ProjectStats);
-        })
-      );
-      setProjectStats(statsMap);
-    } catch {
-      // keep defaults
-    } finally {
-      setLoading(false);
-    }
+  const loadData = useCallback(() => {
+    const mockDash: DashboardData = {
+      totalProjects: 3,
+      totalTasks: 9,
+      completedTasks: 3,
+      overdueTasks: 1,
+      totalUsers: 5,
+      completionRate: 33,
+      recentTasks: [],
+      recentActivity: [],
+    };
+    setDashboard(mockDash);
+    setProjects([
+      { id: "proj-1", name: "Website Redesign", color: "#6366f1", _count: { tasks: 5, members: 3 } },
+      { id: "proj-2", name: "Mobile App v2", color: "#10b981", _count: { tasks: 2, members: 5 } },
+      { id: "proj-3", name: "Q1 Marketing", color: "#f59e0b", _count: { tasks: 2, members: 4 } },
+    ]);
+    const statsMap = new Map<string, ProjectStats>();
+    statsMap.set("proj-1", { total: 5, completed: 2, completionRate: 40, overdue: 1, bySection: {}, byPriority: { high: 2, medium: 2, low: 1, none: 0 }, byAssignee: [{ user: { id: "demo-user", name: "Demo User", avatar: null }, count: 3, completedCount: 2 }] });
+    statsMap.set("proj-2", { total: 2, completed: 0, completionRate: 0, overdue: 0, bySection: {}, byPriority: { high: 1, medium: 1, low: 0, none: 0 }, byAssignee: [{ user: { id: "user-2", name: "Sarah Chen", avatar: null }, count: 1, completedCount: 0 }] });
+    statsMap.set("proj-3", { total: 2, completed: 2, completionRate: 100, overdue: 0, bySection: {}, byPriority: { high: 1, medium: 1, low: 0, none: 0 }, byAssignee: [{ user: { id: "user-3", name: "Alex Rivera", avatar: null }, count: 1, completedCount: 1 }] });
+    setProjectStats(statsMap);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
