@@ -304,3 +304,9 @@ Source: recherche exhaustive sur asana.com (avril 2026)
 - Pour lancer: `cd adana && npm install && npx prisma db push && npx tsx prisma/seed.ts && npm run dev`
 - Recherche Asana complète effectuée (22 catégories, 500+ features identifiées)
 - Features majeures implémentées, features avancées/enterprise listées ci-dessus pour le futur
+
+---
+
+## DEPLOYMENT
+- ALWAYS push to production.
+- Whenever updates are made to the code, ensure all changes are committed and pushed to the `main` branch to trigger a production deployment. Do not leave changes unpushed!
