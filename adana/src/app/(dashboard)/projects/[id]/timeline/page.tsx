@@ -1,21 +1,13 @@
-import { getSectionsForProject, getTasksForProject, PROJECT_IDS } from "@/lib/mock-data";
-import { TimelinePageClient } from "./timeline-client";
+import TimelineViewClient from "./timeline-view";
 
 export function generateStaticParams() {
-  return PROJECT_IDS.map((id) => ({ id }));
+  return [
+    { id: "project-website" },
+    { id: "project-mobile" },
+    { id: "project-marketing" },
+  ];
 }
 
-export default function ProjectTimelinePage({ params }: { params: { id: string } }) {
-  const sections = getSectionsForProject(params.id);
-  const tasks = getTasksForProject(params.id);
-  const dependencies: { id: string; blockedTaskId: string; blockingTaskId: string }[] = [];
-
-  return (
-    <TimelinePageClient
-      projectId={params.id}
-      initialSections={sections}
-      initialTasks={tasks as any}
-      initialDependencies={dependencies}
-    />
-  );
+export default function Page() {
+  return <TimelineViewClient />;
 }

@@ -1,19 +1,13 @@
-import { getSectionsForProject, getTasksForProject, PROJECT_IDS } from "@/lib/mock-data";
-import { ProjectListClient } from "./list-client";
+import ListViewClient from "./list-view";
 
 export function generateStaticParams() {
-  return PROJECT_IDS.map((id) => ({ id }));
+  return [
+    { id: "project-website" },
+    { id: "project-mobile" },
+    { id: "project-marketing" },
+  ];
 }
 
-export default function ProjectListPage({ params }: { params: { id: string } }) {
-  const sections = getSectionsForProject(params.id);
-  const tasks = getTasksForProject(params.id);
-
-  return (
-    <ProjectListClient
-      projectId={params.id}
-      initialSections={sections}
-      initialTasks={tasks as any}
-    />
-  );
+export default function Page() {
+  return <ListViewClient />;
 }

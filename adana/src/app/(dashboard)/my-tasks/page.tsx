@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import { useAppStore } from "@/store/app-store";
 import type { Task } from "@/types";
 import { getMyTasks as getMockTasks, mockTasks } from "@/lib/mock-data";
 
@@ -29,26 +30,13 @@ type TabKey = "today" | "upcoming" | "later";
 // -- Component ----------------------------------------------------------------
 
 export default function MyTasksPage() {
-  const [todayTasks, setTodayTasks] = useState<Task[]>([]);
-  const [upcomingTasks, setUpcomingTasks] = useState<Task[]>([]);
-  const [laterTasks, setLaterTasks] = useState<Task[]>([]);
+  const { getMyTasks, createTask, toggleTaskComplete, loading } = useAppStore();
   const [activeTab, setActiveTab] = useState<TabKey>("today");
   const [sortBy, setSortBy] = useState<"due_date" | "priority" | "title">("due_date");
   const [showAddTask, setShowAddTask] = useState(false);
   const [newTaskName, setNewTaskName] = useState("");
-  const [loading, setLoading] = useState(true);
 
-  const loadTasks = useCallback(() => {
-    const result = getMockTasks();
-    setTodayTasks(result.today as Task[]);
-    setUpcomingTasks(result.upcoming as Task[]);
-    setLaterTasks(result.later as Task[]);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    loadTasks();
-  }, [loadTasks]);
+  const { today: todayTasks, upcoming: upcomingTasks, later: laterTasks } = getMyTasks();
 
   const categorized: Record<TabKey, Task[]> = {
     today: todayTasks,
@@ -79,16 +67,13 @@ export default function MyTasksPage() {
 
   function handleAddTask() {
     if (!newTaskName.trim()) return;
-    // Client-side only for demo
+    await createTask({ title: newTaskName.trim() });
     setNewTaskName("");
     setShowAddTask(false);
   }
 
-  function handleToggleComplete(taskId: string) {
-    // Client-side toggle for demo
-    setTodayTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, completed: !t.completed } : t));
-    setUpcomingTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, completed: !t.completed } : t));
-    setLaterTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, completed: !t.completed } : t));
+  async function handleToggleComplete(taskId: string) {
+    await toggleTaskComplete(taskId);
   }
 
   if (loading) {
@@ -227,11 +212,6 @@ export default function MyTasksPage() {
                   >
                     {task.title}
                   </p>
-                  {!!(task as Record<string, unknown>).project && (
-                    <p className="text-xs text-gray-400">
-                      {((task as Record<string, unknown>).project as { name: string })?.name}
-                    </p>
-                  )}
                 </div>
                 {task.priority && task.priority !== "none" && (
                   <span

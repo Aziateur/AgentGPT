@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAppStore } from "@/store/app-store";
 
-export default function ProjectRedirectClient() {
+export default function ProjectDetailPage() {
   const params = useParams();
   const id = params?.id as string;
   const router = useRouter();

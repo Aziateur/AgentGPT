@@ -1,17 +1,13 @@
-import { getTasksForProject, PROJECT_IDS } from "@/lib/mock-data";
-import { CalendarPageClient } from "./calendar-client";
+import CalendarViewClient from "./calendar-view";
 
 export function generateStaticParams() {
-  return PROJECT_IDS.map((id) => ({ id }));
+  return [
+    { id: "project-website" },
+    { id: "project-mobile" },
+    { id: "project-marketing" },
+  ];
 }
 
-export default function ProjectCalendarPage({ params }: { params: { id: string } }) {
-  const tasks = getTasksForProject(params.id);
-
-  return (
-    <CalendarPageClient
-      projectId={params.id}
-      initialTasks={tasks as any}
-    />
-  );
+export default function Page() {
+  return <CalendarViewClient />;
 }

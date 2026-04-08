@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useAppStore } from "@/store/app-store";
+
+import Link from "next/link";
 import { mockUser, mockProjects, mockTasks } from "@/lib/mock-data";
 
 const priorityColor: Record<string, string> = {
@@ -23,12 +26,24 @@ function getGreeting() {
   return "evening";
 }
 
-export default function HomePage() {
-  const user = mockUser;
-  const tasks = mockTasks.filter((t) => t.assigneeId === "demo-user");
-  const projects = mockProjects;
+// -- Page ------------------------------------------------------------------
 
-  const upcomingTasks = tasks
+export default function HomePage() {
+  const { initialized, loading, currentUser, projects, tasks } = useAppStore();
+
+  if (!initialized || loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+      </div>
+    );
+  }
+
+  const user = currentUser ?? { id: "demo", name: "Demo User", email: "demo@adana.dev" };
+
+  const allTasks = tasks as Array<Record<string, unknown>>;
+
+  const upcomingTasks = allTasks
     .filter((t) => !t.completed && t.dueDate)
     .sort(
       (a, b) =>
@@ -36,16 +51,18 @@ export default function HomePage() {
     )
     .slice(0, 5);
 
-  const completedCount = tasks.filter((t) => t.completed).length;
-  const overdueCount = tasks.filter(
-    (t) => !t.completed && t.dueDate && new Date(t.dueDate) < new Date()
+  const completedCount = allTasks.filter((t) => t.completed).length;
+  const overdueCount = allTasks.filter(
+    (t) => !t.completed && t.dueDate && new Date(t.dueDate as string) < new Date()
   ).length;
+
+  const allProjects = projects as Array<Record<string, unknown>>;
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 p-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">
-          Good {getGreeting()}, {user.name.split(" ")[0]}
+          Good {getGreeting()}, {(user.name as string).split(" ")[0]}
         </h1>
         <p className="mt-1 text-sm text-gray-500">
           Here&apos;s what&apos;s happening across your projects.
@@ -68,10 +85,10 @@ export default function HomePage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-        <StatCard label="Total Tasks" value={tasks.length} />
+        <StatCard label="Total Tasks" value={allTasks.length} />
         <StatCard label="Completed" value={completedCount} />
         <StatCard label="Overdue" value={overdueCount} accent={overdueCount > 0} />
-        <StatCard label="Projects" value={projects.length} />
+        <StatCard label="Projects" value={allProjects.length} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -115,13 +132,13 @@ export default function HomePage() {
             </Link>
           </div>
           <ul className="divide-y divide-gray-100">
-            {projects.length === 0 && (
+            {allProjects.length === 0 && (
               <li className="px-5 py-8 text-center text-sm text-gray-400">
                 No projects yet. Create one to get started.
               </li>
             )}
-            {projects.slice(0, 5).map((project) => (
-              <li key={project.id}>
+            {allProjects.slice(0, 5).map((project) => (
+              <li key={project.id as string}>
                 <Link
                   href={`/projects/${project.id}/list`}
                   className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50"

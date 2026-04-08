@@ -1,19 +1,13 @@
-import { getSectionsForProject, getTasksForProject, PROJECT_IDS } from "@/lib/mock-data";
-import { BoardPageClient } from "./board-client";
+import BoardViewClient from "./board-view";
 
 export function generateStaticParams() {
-  return PROJECT_IDS.map((id) => ({ id }));
+  return [
+    { id: "project-website" },
+    { id: "project-mobile" },
+    { id: "project-marketing" },
+  ];
 }
 
-export default function ProjectBoardPage({ params }: { params: { id: string } }) {
-  const sections = getSectionsForProject(params.id);
-  const tasks = getTasksForProject(params.id);
-
-  return (
-    <BoardPageClient
-      projectId={params.id}
-      initialSections={sections}
-      initialTasks={tasks as any}
-    />
-  );
+export default function Page() {
+  return <BoardViewClient />;
 }
