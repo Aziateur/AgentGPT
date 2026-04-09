@@ -2,7 +2,8 @@
 
 ## Description
 Reconstruction complète d'Asana (asana.com) en tant qu'application web de gestion de projet appelée **Adana**.
-Tech stack: Next.js 14 (App Router) + TypeScript + Tailwind CSS + Prisma + SQLite.
+Tech stack: Next.js 14 (App Router, static export) + TypeScript + Tailwind CSS + Zustand + Supabase (Postgres).
+Deployed as a fully static site on Cloudflare Pages via the `gh-pages` branch.
 
 ---
 
@@ -295,12 +296,53 @@ Source: recherche exhaustive sur asana.com (avril 2026)
 
 ---
 
+## DATA ARCHITECTURE (Supabase + Zustand)
+
+The app is a fully static Next.js export with all data and mutations going through Supabase directly from the browser (no server actions, no Prisma).
+
+### Supabase
+- Project ref: `qrksglxemydjzvpnyzzs`
+- Client singleton: `adana/src/lib/supabase.ts`
+- Tables (snake_case columns): `users`, `projects`, `sections`, `tasks`
+- RLS enabled with permissive "allow all" policies (demo mode)
+- Env vars required for runtime:
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+### Zustand Store (`adana/src/store/app-store.ts`)
+Central store that is the single source of truth for the UI:
+- On `init()`, fetches `users`, `projects`, `sections`, `tasks` from Supabase in parallel
+- If `projects` table is empty on first load, auto-seeds with mock data from `adana/src/lib/mock-data.ts`
+- If Supabase fails, sets `error` state and shows empty UI (NO mock fallback)
+- Mutations (`createProject`, `updateProject`, `deleteProject`, `toggleFavorite`, `createTask`, `updateTask`, `deleteTask`, `toggleTaskComplete`, `createSection`, etc.) optimistically update local state AND persist to Supabase
+- Maps snake_case DB columns to camelCase TypeScript types via `dbToProject` / `projectToDb` helpers
+- IDs are generated client-side with `crypto.randomUUID()`
+
+### Mock Data (`adana/src/lib/mock-data.ts`)
+- Used ONLY for auto-seeding an empty Supabase database on first load
+- Not a runtime fallback — if Supabase is unreachable, the UI shows an empty/error state
+
+### Pages
+All pages are client components (`"use client"`) that read from and write to the Zustand store. Dynamic project routes (`projects/[id]/...`) are split into thin server wrappers with `generateStaticParams` + client view components to satisfy static export requirements.
+
+---
+
+## DEPLOYMENT (Cloudflare Pages)
+
+- Cloudflare Pages builds and deploys from the `gh-pages` branch (Production), with `main` as Preview.
+- Next.js is configured with `output: "export"` so `npm run build` produces `adana/out/` with static HTML/JS only.
+- **To deploy**: merge your work into `main`, then `git push origin main:gh-pages` to trigger Cloudflare Pages build.
+- `vercel.json` is also present for parity but Cloudflare is the primary production target.
+- Do not leave changes unpushed!
+
+---
+
 ## NOTES
 - App appelée "Adana" (inspirée d'Asana)
-- Stack: Next.js 14 + TypeScript + Tailwind + Prisma + SQLite
+- Stack: Next.js 14 (static export) + TypeScript + Tailwind + Zustand + Supabase
 - Tout en un seul dossier `adana/` à la racine du repo
-- Build réussi (next build passe)
+- Build réussi (`cd adana && npm run build` passe, output dans `adana/out/`)
 - Le CLAUDE.md est mis à jour au fur et à mesure de l'avancement
-- Pour lancer: `cd adana && npm install && npx prisma db push && npx tsx prisma/seed.ts && npm run dev`
+- Pour lancer en local: `cd adana && npm install && npm run dev`
 - Recherche Asana complète effectuée (22 catégories, 500+ features identifiées)
 - Features majeures implémentées, features avancées/enterprise listées ci-dessus pour le futur
