@@ -22,6 +22,8 @@ function dbToProject(r: Record<string, unknown>): Project {
     favorite: (r.favorite as boolean) ?? false,
     defaultView: (r.default_view as string) ?? "list",
     creatorId: (r.owner_id as string) ?? "",
+    createdAt: (r.created_at as string) ?? new Date().toISOString(),
+    updatedAt: (r.updated_at as string) ?? new Date().toISOString(),
   };
 }
 
@@ -201,18 +203,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       let sections = (sectionsRes.data || []).map(dbToSection);
       let tasks = (tasksRes.data || []).map(dbToTask);
 
-      // Auto-seed empty DB on first load
-      if (projects.length === 0) {
-        await seedSupabase();
-        const [p2, s2, t2] = await Promise.all([
-          supabase.from("projects").select("*").order("created_at", { ascending: false }),
-          supabase.from("sections").select("*").order("position", { ascending: true }),
-          supabase.from("tasks").select("*").order("position", { ascending: true }),
-        ]);
-        projects = (p2.data || []).map(dbToProject);
-        sections = (s2.data || []).map(dbToSection);
-        tasks = (t2.data || []).map(dbToTask);
-      }
+      // Removed auto-seed logic for live environment
 
       const currentUser =
         users.find((u) => u.id === "demo-user") || users[0] || EMPTY_USER;
@@ -259,6 +250,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       favorite: false,
       defaultView: data.defaultView || "list",
       creatorId: get().currentUser.id,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
     set((s) => ({ projects: [project, ...s.projects] }));
