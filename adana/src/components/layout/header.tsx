@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Search,
@@ -49,15 +49,15 @@ function getBreadcrumbLabel(pathname: string): string {
   if (pathname === "/reporting") return "Reporting";
   if (pathname === "/search") return "Search";
   if (pathname === "/teams") return "Teams";
-  if (pathname === "/projects" && !pathname.includes("/projects/")) return "Projects";
+  if (pathname === "/projects" && !pathname.includes("/project/")) return "Projects";
 
-  // Project sub-pages: /projects/xxx/list -> "List"
-  const projectViewMatch = pathname.match(/\/projects\/[^/]+\/(list|board|timeline|calendar|overview)/);
+  // Project sub-pages: /project/list?id=xxx -> "List"
+  const projectViewMatch = pathname.match(/\/project\/(list|board|timeline|calendar|overview)/);
   if (projectViewMatch) {
     return projectViewMatch[1].charAt(0).toUpperCase() + projectViewMatch[1].slice(1);
   }
 
-  if (pathname.startsWith("/projects/")) return "Project";
+  if (pathname.startsWith("/project/")) return "Project";
   if (pathname.startsWith("/teams/")) return "Team";
   return "Page";
 }
@@ -74,15 +74,15 @@ export function Header() {
   } = useAppStore();
 
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
 
   const [searchFocused, setSearchFocused] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
 
   // Determine if we're on a project page for the view switcher
-  const projectMatch = pathname.match(/\/projects\/([^/]+)/);
-  const isProjectPage = !!projectMatch;
-  const projectId = projectMatch?.[1];
+  const isProjectPage = pathname.startsWith("/project/");
+  const projectId = searchParams?.get("id");
 
   const breadcrumbLabel = getBreadcrumbLabel(pathname);
 
@@ -153,7 +153,7 @@ export function Header() {
               onClick={() => {
                 setProjectView(view.type);
                 if (isProjectPage && projectId) {
-                  router.push(`/projects/${projectId}/${view.type}`);
+                  router.push(`/project/${view.type}?id=${projectId}`);
                 }
               }}
               className={cn(

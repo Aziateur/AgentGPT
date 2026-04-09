@@ -226,7 +226,7 @@ export function ProjectsPageClient({ projects }: { projects: ProjectItem[] }) {
             return (
               <Link
                 key={project.id}
-                href={`/projects/${project.id}/${project.defaultView}`}
+                href={`/project/${project.defaultView || "list"}?id=${project.id}`}
                 className="group rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md"
               >
                 {/* Color bar */}

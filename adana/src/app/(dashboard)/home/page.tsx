@@ -140,7 +140,7 @@ export default function HomePage() {
             {allProjects.slice(0, 5).map((project) => (
               <li key={project.id as string}>
                 <Link
-                  href={`/projects/${project.id}/list`}
+                  href={`/project/list?id=${project.id}`}
                   className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50"
                 >
                   <div

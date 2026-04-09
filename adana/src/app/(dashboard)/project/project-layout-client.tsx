@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useAppStore } from "@/store/app-store";
 
 export default function ProjectLayoutClient({
@@ -8,8 +8,8 @@ export default function ProjectLayoutClient({
 }: {
   children: React.ReactNode;
 }) {
-  const params = useParams();
-  const id = params?.id as string;
+  const searchParams = useSearchParams();
+  const id = searchParams?.get("id") as string;
   const { projects } = useAppStore();
 
   const project = projects.find((p) => p.id === id);

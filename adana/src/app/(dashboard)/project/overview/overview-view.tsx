@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAppStore } from "@/store/app-store";
 import type { Task } from "@/types";
@@ -38,7 +38,7 @@ function ViewNav({ projectId, active }: { projectId: string; active: string }) {
       {views.map((v) => (
         <Link
           key={v.key}
-          href={`/projects/${projectId}/${v.key}`}
+          href={`/project/${v.key}?id=${projectId}`}
           className={`relative px-3 py-2.5 text-sm font-medium transition ${
             active === v.key ? "text-indigo-600" : "text-gray-500 hover:text-gray-700"
           }`}
@@ -56,8 +56,8 @@ function ViewNav({ projectId, active }: { projectId: string; active: string }) {
 // -- Page ---------------------------------------------------------------------
 
 export default function OverviewViewClient() {
-  const params = useParams();
-  const id = params?.id as string;
+  const searchParams = useSearchParams();
+  const id = searchParams?.get("id") as string;
 
   const { projects, getProjectTasks, users } = useAppStore();
 

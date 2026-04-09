@@ -89,7 +89,7 @@ export default function ProjectsPage() {
       setNewProjectName("");
       setNewProjectDesc("");
       setNewProjectColor("#4f46e5");
-      router.push(`/projects/${project.id}/list`);
+      router.push(`/project/list?id=${project.id}`);
     } finally {
       setIsCreating(false);
     }
@@ -219,7 +219,7 @@ export default function ProjectsPage() {
             return (
               <Link
                 key={project.id}
-                href={`/projects/${project.id}/${project.defaultView || "list"}`}
+                href={`/project/${project.defaultView || "list"}?id=${project.id}`}
                 className="group rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md"
               >
                 {/* Color bar */}

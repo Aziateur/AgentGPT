@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Plus } from "lucide-react";
+import { useAppStore } from "@/store/app-store";
 import { TaskDetailPanel } from "@/components/tasks/task-detail-panel";
 import { CreateTaskModal } from "@/components/tasks/create-task-modal";
 import type { Task, Section } from "@/types";
@@ -35,7 +37,7 @@ function ViewNav({ projectId, active }: { projectId: string; active: string }) {
       {views.map((v) => (
         <Link
           key={v.key}
-          href={`/projects/${projectId}/${v.key}`}
+          href={`/project/${v.key}?id=${projectId}`}
           className={`relative px-3 py-2.5 text-sm font-medium transition ${
             active === v.key ? "text-indigo-600" : "text-gray-500 hover:text-gray-700"
           }`}
@@ -52,21 +54,28 @@ function ViewNav({ projectId, active }: { projectId: string; active: string }) {
 
 // -- Component ----------------------------------------------------------------
 
-export function ProjectListClient({
-  projectId,
-  initialSections,
-  initialTasks,
-}: {
-  projectId: string;
-  initialSections: Section[];
-  initialTasks: Task[];
-}) {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
-  const [sections] = useState<Section[]>(initialSections);
+export default function ProjectListPage() {
+  const searchParams = useSearchParams();
+  const projectId = searchParams?.get("id") as string;
+
+  const {
+    getProjectTasks,
+    getProjectSections,
+    toggleTaskComplete,
+    updateTask,
+    deleteTask,
+    createTask,
+    users,
+  } = useAppStore();
+
+  const tasks = getProjectTasks(projectId);
+  const sections = getProjectSections(projectId);
+
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createSectionId, setCreateSectionId] = useState<string | null>(null);
+
+  const selectedTask = tasks.find((t) => t.id === selectedTaskId) ?? null;
 
   // Group tasks by section
   const tasksBySection: Record<string, Task[]> = {};
@@ -80,101 +89,78 @@ export function ProjectListClient({
     }
   }
 
-  const reloadTasks = useCallback(async () => {
-    // client-side do nothing for demo
-  }, [projectId]);
-
-  const loadTaskDetail = useCallback(async (taskId: string) => {
-    // client-side do nothing for demo
-    // We already have task detail in `selectedTask` mostly
-    const task = tasks.find(t => t.id === taskId);
-    if (task) setSelectedTask(task);
-  }, [tasks]);
-
-  async function handleTaskClick(taskId: string) {
-    setSelectedTaskId(taskId);
-    await loadTaskDetail(taskId);
-  }
-
   async function handleToggleComplete(taskId: string) {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, completed: !t.completed } : t))
-    );
-    if (selectedTask?.id === taskId) {
-      setSelectedTask((prev) => (prev ? { ...prev, completed: !prev.completed } : null));
-    }
+    await toggleTaskComplete(taskId);
   }
 
   async function handleUpdateTask(taskId: string, updates: Partial<Task>) {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, ...updates } : t))
-    );
-    if (selectedTask?.id === taskId) {
-      setSelectedTask((prev) => (prev ? { ...prev, ...updates } : null));
-    }
+    await updateTask(taskId, updates);
   }
 
   async function handleDeleteTask(taskId: string) {
-    setTasks((prev) => prev.filter((t) => t.id !== taskId));
-    if (selectedTaskId === taskId) {
-      setSelectedTaskId(null);
-      setSelectedTask(null);
-    }
+    await deleteTask(taskId);
+    if (selectedTaskId === taskId) setSelectedTaskId(null);
   }
 
   async function handleDuplicateTask(taskId: string) {
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
-    const newTask = { ...task, id: `task-${Date.now()}`, title: `${task.title} (Copy)` };
-    setTasks((prev) => [...prev, newTask]);
+    await createTask({
+      title: `${task.title} (copy)`,
+      description: task.description ?? undefined,
+      projectId: task.projectId ?? undefined,
+      sectionId: task.sectionId ?? undefined,
+      assigneeId: task.assigneeId ?? undefined,
+      dueDate: task.dueDate ?? undefined,
+      priority: task.priority ?? undefined,
+    });
   }
 
-  async function handleAddComment(taskId: string, text: string) {
-    // mock
-  }
-
-  async function handleAddSubtask(parentId: string, title: string) {
-    // mock
-  }
-
-  async function handleToggleSubtaskComplete(subtaskId: string) {
-    // mock
-  }
-
-  async function handleToggleLike(taskId: string) {
-    // mock
-  }
-
-  async function handleToggleFollow(taskId: string) {
-    // mock
-  }
-
-  async function handleSetApprovalStatus(taskId: string, status: string) {
-    // mock
-  }
-
-  async function handleCreateTask(data: { name: string; description: string; assigneeId: string | null; dueDate: string | null; priority: string; sectionId: string | null; tagIds: string[] }) {
-    const newTask = {
-      id: `task-${Date.now()}`,
+  async function handleCreateTask(data: {
+    name: string;
+    description: string;
+    assigneeId: string | null;
+    dueDate: string | null;
+    priority: string;
+    sectionId: string | null;
+    tagIds: string[];
+  }) {
+    await createTask({
       title: data.name,
-      description: data.description,
-      dueDate: data.dueDate,
-      priority: data.priority,
-      sectionId: data.sectionId,
-      completed: false,
-      position: tasks.length + 1,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      description: data.description || undefined,
       projectId,
-    } as any;
-    setTasks((prev) => [...prev, newTask]);
+      sectionId: data.sectionId || undefined,
+      assigneeId: data.assigneeId || undefined,
+      dueDate: data.dueDate || undefined,
+      priority: data.priority || undefined,
+    });
+  }
+
+  // Stub handlers for detail panel features not yet wired in the store
+  async function handleAddComment(_taskId: string, _text: string) {}
+  async function handleAddSubtask(parentId: string, title: string) {
+    await createTask({ title, projectId, parentId });
+  }
+  async function handleToggleSubtaskComplete(subtaskId: string) {
+    await toggleTaskComplete(subtaskId);
+  }
+  async function handleToggleLike(_taskId: string) {}
+  async function handleToggleFollow(_taskId: string) {}
+  async function handleSetApprovalStatus(taskId: string, status: string) {
+    await updateTask(taskId, { approvalStatus: status as Task["approvalStatus"] });
+  }
+
+  function getAssignee(assigneeId: string | null) {
+    if (!assigneeId) return null;
+    return users.find((u) => u.id === assigneeId) ?? null;
   }
 
   function renderTaskRow(task: Task) {
+    const assignee = getAssignee(task.assigneeId);
     return (
       <div
         key={task.id}
-        onClick={() => handleTaskClick(task.id)}
+        onClick={() => setSelectedTaskId(task.id)}
         className={`flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 cursor-pointer border-b border-gray-100 ${
           selectedTaskId === task.id ? "bg-indigo-50/50" : ""
         }`}
@@ -184,7 +170,7 @@ export function ProjectListClient({
             e.stopPropagation();
             handleToggleComplete(task.id);
           }}
-          className={`flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-2 transition ${
+          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition ${
             task.completed
               ? "border-green-500 bg-green-500 text-white"
               : "border-gray-300 hover:border-gray-400"
@@ -201,9 +187,9 @@ export function ProjectListClient({
             {task.title}
           </p>
         </div>
-        {task.assignee && (
+        {assignee && (
           <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-medium text-indigo-600">
-            {(task.assignee.name || "?")[0].toUpperCase()}
+            {(assignee.name || "?")[0].toUpperCase()}
           </div>
         )}
         {task.priority && task.priority !== "none" && (
@@ -219,6 +205,20 @@ export function ProjectListClient({
       </div>
     );
   }
+
+  // Build enriched selectedTask with assignee for the detail panel
+  const enrichedSelectedTask = selectedTask
+    ? {
+        ...selectedTask,
+        assignee: getAssignee(selectedTask.assigneeId)
+          ? {
+              id: selectedTask.assigneeId!,
+              name: getAssignee(selectedTask.assigneeId)!.name,
+              avatar: getAssignee(selectedTask.assigneeId)!.avatar ?? null,
+            }
+          : null,
+      }
+    : null;
 
   return (
     <div className="flex h-full flex-col">
@@ -251,7 +251,7 @@ export function ProjectListClient({
               )}
 
               {/* Sectioned tasks */}
-              {sections.map((section) => {
+              {sections.map((section: Section) => {
                 const sectionTasks = tasksBySection[section.id] || [];
                 return (
                   <div key={section.id}>
@@ -285,14 +285,11 @@ export function ProjectListClient({
         </div>
 
         {/* Detail panel */}
-        {selectedTask && (
+        {enrichedSelectedTask && (
           <div className="w-[420px] shrink-0 border-l border-gray-200 overflow-auto">
             <TaskDetailPanel
-              task={selectedTask}
-              onClose={() => {
-                setSelectedTaskId(null);
-                setSelectedTask(null);
-              }}
+              task={enrichedSelectedTask as Task & { assignee?: { id: string; name: string; avatar: string | null } | null }}
+              onClose={() => setSelectedTaskId(null)}
               onUpdate={handleUpdateTask}
               onDelete={handleDeleteTask}
               onDuplicate={handleDuplicateTask}

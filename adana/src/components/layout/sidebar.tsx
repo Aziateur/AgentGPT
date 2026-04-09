@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   House,
@@ -144,6 +144,7 @@ function Separator() {
 
 export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: SidebarProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { currentUser, sidebarCollapsed, toggleSidebar } = useAppStore();
 
@@ -276,11 +277,11 @@ export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: Si
         {favoriteProjects.map((project) => (
           <Link
             key={project.id}
-            href={`/projects/${project.id}/list`}
+            href={`/project/list?id=${project.id}`}
             className={cn(
               "group flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors",
               "text-sidebar-text hover:bg-sidebar-hover hover:text-sidebar-text-active",
-              pathname.startsWith(`/projects/${project.id}`) &&
+              pathname.startsWith(`/project/`) && searchParams?.get("id") === project.id &&
                 "bg-sidebar-active text-sidebar-text-active",
               sidebarCollapsed && "justify-center px-0"
             )}
@@ -317,11 +318,11 @@ export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: Si
             {recentProjects.map((project) => (
               <Link
                 key={project.id}
-                href={`/projects/${project.id}`}
+                href={`/project/list?id=${project.id}`}
                 className={cn(
                   "group flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors",
                   "text-sidebar-text hover:bg-sidebar-hover hover:text-sidebar-text-active",
-                  pathname === `/projects/${project.id}` &&
+                  pathname.startsWith(`/project/`) && searchParams?.get("id") === project.id &&
                     "bg-sidebar-active text-sidebar-text-active",
                   sidebarCollapsed && "justify-center px-0"
                 )}

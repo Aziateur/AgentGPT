@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useAppStore } from "@/store/app-store";
 
 export default function ProjectRedirectClient() {
-  const params = useParams();
-  const id = params?.id as string;
+  const searchParams = useSearchParams();
+  const id = searchParams?.get("id") as string;
   const router = useRouter();
   const { projects } = useAppStore();
 
@@ -14,7 +14,7 @@ export default function ProjectRedirectClient() {
     if (!id) return;
     const project = projects.find((p) => p.id === id);
     const defaultView = project?.defaultView || "list";
-    router.replace(`/projects/${id}/${defaultView}`);
+    router.replace(`/project/${defaultView}?id=${id}`);
   }, [id, projects, router]);
 
   return null;

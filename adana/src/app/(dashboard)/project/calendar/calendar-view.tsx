@@ -1,22 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface DbTask {
-  id: string;
-  title: string;
-  completed: boolean;
-  priority?: string | null;
-  dueDate?: string | null;
-  assigneeId?: string | null;
-  assignee?: { id: string; name: string; avatar: string | null } | null;
-  [key: string]: unknown;
-}
+import { useAppStore } from "@/store/app-store";
+import type { Task } from "@/types";
 
 // ---------------------------------------------------------------------------
 // View Nav
@@ -35,7 +23,7 @@ function ViewNav({ projectId, active }: { projectId: string; active: string }) {
       {views.map((v) => (
         <Link
           key={v.key}
-          href={`/projects/${projectId}/${v.key}`}
+          href={`/project/${v.key}?id=${projectId}`}
           className={`relative px-3 py-2.5 text-sm font-medium transition ${
             active === v.key ? "text-indigo-600" : "text-gray-500 hover:text-gray-700"
           }`}
@@ -65,17 +53,17 @@ const priorityColor: Record<string, string> = {
 // Component
 // ---------------------------------------------------------------------------
 
-export function CalendarPageClient({
-  projectId,
-  initialTasks,
-}: {
-  projectId: string;
-  initialTasks: DbTask[];
-}) {
+export default function CalendarViewClient() {
+  const searchParams = useSearchParams();
+  const projectId = searchParams?.get("id") as string;
+
+  const { getProjectTasks } = useAppStore();
+  const tasks = getProjectTasks(projectId);
+
   const [currentDate, setCurrentDate] = useState(new Date());
 
   // Only tasks with due dates
-  const tasksWithDates = initialTasks.filter((t) => t.dueDate);
+  const tasksWithDates = tasks.filter((t: Task) => t.dueDate);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -96,8 +84,8 @@ export function CalendarPageClient({
     setCurrentDate(new Date(year, month + 1, 1));
   }
 
-  function getTasksForDay(day: number): DbTask[] {
-    return tasksWithDates.filter((t) => {
+  function getTasksForDay(day: number): Task[] {
+    return tasksWithDates.filter((t: Task) => {
       if (!t.dueDate) return false;
       const d = new Date(t.dueDate);
       return d.getFullYear() === year && d.getMonth() === month && d.getDate() === day;
@@ -188,13 +176,13 @@ export function CalendarPageClient({
                         {day}
                       </div>
                       <div className="space-y-1">
-                        {dayTasks.slice(0, 3).map((task) => (
+                        {dayTasks.slice(0, 3).map((task: Task) => (
                           <div
                             key={task.id}
                             className={`truncate rounded px-1.5 py-0.5 text-[11px] font-medium text-white ${
                               task.completed ? "opacity-60 line-through" : ""
                             }`}
-                            style={{ backgroundColor: priorityColor[task.priority ?? "none"] }}
+                            style={{ backgroundColor: priorityColor[task.priority ?? "none"] ?? priorityColor.none }}
                             title={task.title}
                           >
                             {task.title}

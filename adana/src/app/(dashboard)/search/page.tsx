@@ -67,7 +67,7 @@ export default function SearchPage() {
             title: task.title,
             subtitle: project ? project.name : "No project",
             meta: task.priority && task.priority !== "none" ? `${task.priority} priority` : undefined,
-            href: project ? `/projects/${project.id}/list` : "/my-tasks",
+            href: project ? `/project/list?id=${project.id}` : "/my-tasks",
           });
         }
       }
@@ -81,7 +81,7 @@ export default function SearchPage() {
             type: "project",
             title: project.name,
             subtitle: `${taskCount} task${taskCount !== 1 ? "s" : ""}`,
-            href: `/projects/${project.id}/list`,
+            href: `/project/list?id=${project.id}`,
           });
         }
       }

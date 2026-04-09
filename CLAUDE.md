@@ -3,7 +3,7 @@
 ## Description
 Reconstruction complète d'Asana (asana.com) en tant qu'application web de gestion de projet appelée **Adana**.
 Tech stack: Next.js 14 (App Router, static export) + TypeScript + Tailwind CSS + Zustand + Supabase (Postgres).
-Deployed as a fully static site on Cloudflare Pages via the `gh-pages` branch.
+Deployed as a fully static site on Cloudflare Pages via the `main` branch.
 
 ---
 
@@ -329,11 +329,11 @@ All pages are client components (`"use client"`) that read from and write to the
 
 ## DEPLOYMENT (Cloudflare Pages)
 
-- Cloudflare Pages builds and deploys from the `gh-pages` branch (Production), with `main` as Preview.
+- Cloudflare Pages builds and deploys directly from the `main` branch (Production).
 - Next.js is configured with `output: "export"` so `npm run build` produces `adana/out/` with static HTML/JS only.
-- **To deploy**: merge your work into `main`, then `git push origin main:gh-pages` to trigger Cloudflare Pages build.
-- `vercel.json` is also present for parity but Cloudflare is the primary production target.
-- Do not leave changes unpushed!
+- **To deploy**: just commit and push to `main` (`git add . && git commit -m "..." && git push origin main`).
+- The `gh-pages` and `production` branches are NOT used. We use only 1 branch: `main`.
+- Cloudflare Pages will automatically trigger a build when you push to `main` (using root directory strategy).
 
 ---
 
@@ -350,11 +350,8 @@ All pages are client components (`"use client"`) that read from and write to the
 ---
 
 ## DEPLOYMENT
-- ALWAYS deploy to production after making changes.
+- ALWAYS deploy to production after making changes by pushing to `main`.
 - Hosting: Cloudflare Pages (project name: `adana`, domain: `adana-aim.pages.dev`)
-- Cloudflare's git-based auto-build does NOT work because the app lives in the `adana/` subdirectory. You MUST deploy manually using wrangler CLI.
-- Deploy steps (run from repo root):
-  1. `cd adana && npx @cloudflare/next-on-pages` — builds the Next.js app for Cloudflare Workers
-  2. `cd adana && npx wrangler pages deploy .vercel/output/static --project-name adana --branch production` — deploys to production
-- Also commit and push source to GitHub: `git add . && git commit -m "..." && git push origin main`
-- Do not leave changes undeployed!
+- Just commit and push source to GitHub: `git add . && git commit -m "..." && git push origin main`
+- Cloudflare Pages will automatically handle the build and deploy. Do not use wrangler CLI manually unless troubleshooting.
+- We use ONLY 1 branch (`main`)! Do not create or use other branches like `gh-pages`.
