@@ -35,13 +35,13 @@ type ProjectGroup = {
 // -- Component ----------------------------------------------------------------
 
 export default function PortfoliosPage() {
-  const { projects, tasks, loading } = useAppStore();
+  const { projects, tasks, loading, localPortfolios: rawLocalPortfolios, setLocalPortfolios } = useAppStore();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newColor, setNewColor] = useState(PALETTE[0]);
-  // Local portfolios stored in state (since not in Supabase)
-  const [localPortfolios, setLocalPortfolios] = useState<ProjectGroup[]>([]);
+  
+  const localPortfolios: ProjectGroup[] = rawLocalPortfolios || [];
 
   const handleCreate = () => {
     if (!newName.trim()) return;
@@ -64,7 +64,7 @@ export default function PortfoliosPage() {
         };
       }),
     };
-    setLocalPortfolios((prev) => [newPortfolio, ...prev]);
+    setLocalPortfolios([newPortfolio, ...localPortfolios]);
     setNewName("");
     setNewDescription("");
     setNewColor(PALETTE[0]);

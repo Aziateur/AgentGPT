@@ -1,11 +1,12 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import { supabase } from "@/lib/supabase";
 import {
   mockProjects,
   mockSections,
   mockTasks,
 } from "@/lib/mock-data";
-import type { User, Project, Section, Task, Notification } from "@/types";
+import type { User, Project, Section, Task, Notification, Goal, Portfolio } from "@/types";
 
 // ---------------------------------------------------------------------------
 // snake_case <-> camelCase mappers
@@ -128,11 +129,18 @@ interface AppState {
   tasks: Task[];
   notifications: Notification[];
   currentUser: User;
+  
+  localGoals: any[];        // Using any here temporarily to avoid complex Goal imports for now
+  localPortfolios: any[];   // Using any to store the UI portfolios
 
   // State flags
   initialized: boolean;
   loading: boolean;
   error: string | null;
+
+  // Auth
+  setCurrentUser: (user: User) => void;
+  logout: () => void;
 
   // Init
   init: () => Promise<void>;
@@ -162,25 +170,36 @@ interface AppState {
   // Helpers
   getProjectTasks: (projectId: string) => Task[];
   getProjectSections: (projectId: string) => Section[];
-  getMyTasks: () => { today: Task[]; upcoming: Task[]; later: Task[] };
+  getMyTasks: () => { today: Task[]; upcoming: Task[]; later: Task[]; recurring: Task[] };
+
+  // Local state mutations
+  setLocalGoals: (goals: any[]) => void;
+  setLocalPortfolios: (portfolios: any[]) => void;
 }
 
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
 
-export const useAppStore = create<AppState>((set, get) => ({
-  users: [],
-  projects: [],
-  sections: [],
-  tasks: [],
-  notifications: [],
-  currentUser: EMPTY_USER,
-  initialized: false,
-  loading: false,
-  error: null,
+export const useAppStore = create<AppState>()(
+  persist(
+    (set, get) => ({
+      users: [],
+      projects: [],
+      sections: [],
+      tasks: [],
+      notifications: [],
+      currentUser: EMPTY_USER,
+      localGoals: [],
+      localPortfolios: [],
+      initialized: false,
+      loading: false,
+      error: null,
 
-  init: async () => {
+      setCurrentUser: (user) => set({ currentUser: user }),
+      logout: () => set({ currentUser: EMPTY_USER }),
+
+      init: async () => {
     if (get().initialized) return;
     set({ loading: true, error: null });
 
@@ -203,10 +222,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       let sections = (sectionsRes.data || []).map(dbToSection);
       let tasks = (tasksRes.data || []).map(dbToTask);
 
-      // Removed auto-seed logic for live environment
-
-      const currentUser =
-        users.find((u) => u.id === "demo-user") || users[0] || EMPTY_USER;
+      // Keep the current user if logged in, otherwise default to EMPTY_USER
+      // Do not randomly assign "demo-user" anymore
+      const currentId = get().currentUser.id;
+      let nextUser = get().currentUser;
+      
+      if (currentId && currentId !== "") {
+        const found = users.find((u) => u.id === currentId);
+        if (found) nextUser = found;
+      }
 
       set({
         users,
@@ -214,7 +238,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         sections,
         tasks,
         notifications: [],
-        currentUser,
+        currentUser: nextUser,
         initialized: true,
         loading: false,
         error: null,
@@ -471,18 +495,33 @@ export const useAppStore = create<AppState>((set, get) => ({
     const myTasks = get().tasks.filter((t) => t.assigneeId === userId && !t.completed);
 
     const today = myTasks.filter(
-      (t) => t.dueDate && new Date(t.dueDate) <= todayEnd
+      (t) => t.dueDate && new Date(t.dueDate) <= todayEnd && t.taskType !== "recurring"
     );
     const upcoming = myTasks.filter(
-      (t) => t.dueDate && new Date(t.dueDate) > todayEnd && new Date(t.dueDate) <= weekEnd
+      (t) => t.dueDate && new Date(t.dueDate) > todayEnd && new Date(t.dueDate) <= weekEnd && t.taskType !== "recurring"
     );
     const later = myTasks.filter(
-      (t) => !t.dueDate || new Date(t.dueDate) > weekEnd
+      (t) => (!t.dueDate || new Date(t.dueDate) > weekEnd) && t.taskType !== "recurring"
     );
+    
+    // Example: Use taskType = 'recurring' or priority for the checklist
+    const recurring = get().tasks.filter((t) => t.assigneeId === userId && !t.completed && t.taskType === "recurring");
 
-    return { today, upcoming, later };
+    return { today, upcoming, later, recurring };
   },
-}));
+
+  setLocalGoals: (goals) => set({ localGoals: goals }),
+  setLocalPortfolios: (portfolios) => set({ localPortfolios: portfolios }),
+}),
+{
+  name: "adana-app-storage",
+  partialize: (state) => ({
+    currentUser: state.currentUser,
+    localGoals: state.localGoals,
+    localPortfolios: state.localPortfolios,
+  }),
+}
+));
 
 // ---------------------------------------------------------------------------
 // Seed helper: used only to populate an empty Supabase database

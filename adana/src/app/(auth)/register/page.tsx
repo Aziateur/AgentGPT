@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, ArrowRight, Loader2, Check } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { useAppStore } from "@/store/app-store";
 
 const passwordRequirements = [
   { label: "At least 8 characters", test: (p: string) => p.length >= 8 },
@@ -20,7 +22,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
@@ -37,10 +39,34 @@ export default function RegisterPage() {
       return;
     }
 
-    // Demo-only: redirect to /home after brief loading
-    setTimeout(() => {
+    try {
+      // Create user in public.users
+      const newUser = {
+        id: crypto.randomUUID(),
+        name: name.trim(),
+        email: email.trim(),
+        avatar: null,
+      };
+
+      const { error: dbError } = await supabase.from("users").insert(newUser);
+      
+      if (dbError) {
+        if (dbError.code === "23505") { // unique violation
+          setError("An account with this email already exists.");
+        } else {
+          setError("Failed to create account. Please try again.");
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Update store
+      useAppStore.getState().setCurrentUser(newUser);
       router.push("/home");
-    }, 500);
+    } catch (err) {
+      setError("An unexpected error occurred.");
+      setLoading(false);
+    }
   }
 
   const allRequirementsMet = passwordRequirements.every((r) => r.test(password));

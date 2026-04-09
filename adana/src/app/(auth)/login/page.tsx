@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { useAppStore } from "@/store/app-store";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,22 +15,45 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
-    // Demo-only: accept any non-empty credentials and redirect to /home
     if (!email.trim() || !password.trim()) {
       setError("Please enter your email and password.");
       setLoading(false);
       return;
     }
 
-    // Simulate brief loading, then redirect
-    setTimeout(() => {
+    try {
+      // Look up user in public.users
+      const { data: userRow, error: dbError } = await supabase
+        .from("users")
+        .select("*")
+        .eq("email", email.trim())
+        .single();
+        
+      if (dbError || !userRow) {
+        setError("Invalid email or user not found.");
+        setLoading(false);
+        return;
+      }
+
+      // Found the user, set them in the store
+      const userObj = {
+        id: userRow.id,
+        name: userRow.name,
+        email: userRow.email,
+        avatar: userRow.avatar || null,
+      };
+
+      useAppStore.getState().setCurrentUser(userObj);
       router.push("/home");
-    }, 500);
+    } catch (err) {
+      setError("An unexpected error occurred.");
+      setLoading(false);
+    }
   }
 
   return (

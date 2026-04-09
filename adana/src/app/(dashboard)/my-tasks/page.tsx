@@ -25,7 +25,7 @@ function isOverdue(dueDate: string) {
   return new Date(dueDate) < new Date();
 }
 
-type TabKey = "today" | "upcoming" | "later";
+type TabKey = "today" | "upcoming" | "later" | "recurring";
 
 // -- Component ----------------------------------------------------------------
 
@@ -36,12 +36,13 @@ export default function MyTasksPage() {
   const [showAddTask, setShowAddTask] = useState(false);
   const [newTaskName, setNewTaskName] = useState("");
 
-  const { today: todayTasks, upcoming: upcomingTasks, later: laterTasks } = getMyTasks();
+  const { today: todayTasks, upcoming: upcomingTasks, later: laterTasks, recurring: recurringTasks } = getMyTasks();
 
   const categorized: Record<TabKey, Task[]> = {
     today: todayTasks,
     upcoming: upcomingTasks,
     later: laterTasks,
+    recurring: recurringTasks,
   };
 
   const displayTasks = categorized[activeTab];
@@ -63,11 +64,15 @@ export default function MyTasksPage() {
     { key: "today", label: "Today", count: todayTasks.length },
     { key: "upcoming", label: "Upcoming", count: upcomingTasks.length },
     { key: "later", label: "Later", count: laterTasks.length },
+    { key: "recurring", label: "Recurring Checklist", count: recurringTasks?.length || 0 },
   ];
 
   async function handleAddTask() {
     if (!newTaskName.trim()) return;
-    await createTask({ title: newTaskName.trim() });
+    await createTask({ 
+      title: newTaskName.trim(),
+      taskType: activeTab === "recurring" ? "recurring" : "task",
+    });
     setNewTaskName("");
     setShowAddTask(false);
   }
@@ -180,6 +185,8 @@ export default function MyTasksPage() {
             <p className="mt-1 text-sm text-gray-500">
               {activeTab === "today"
                 ? "Nothing due today. Enjoy your day!"
+                : activeTab === "recurring"
+                ? "No recurring checklist items."
                 : "No tasks in this category."}
             </p>
           </div>

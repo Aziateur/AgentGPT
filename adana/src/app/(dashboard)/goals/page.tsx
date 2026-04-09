@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useAppStore } from "@/store/app-store";
 
 // -- Types --------------------------------------------------------------------
 
@@ -171,7 +172,9 @@ function GoalCard({
 // -- Main component -----------------------------------------------------------
 
 export default function GoalsPage() {
-  const [goals, setGoals] = useState<GoalData[]>([]);
+  const { localGoals, setLocalGoals, currentUser } = useAppStore();
+  const goals: GoalData[] = localGoals || [];
+
   const [statusFilter, setStatusFilter] = useState<StatusFilterKey>("all");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newName, setNewName] = useState("");
@@ -189,11 +192,11 @@ export default function GoalsPage() {
       progress: 0,
       period: newPeriod.trim() || null,
       parentId: null,
-      ownerInitial: "Y",
-      ownerName: "You",
+      ownerInitial: currentUser?.name?.charAt(0).toUpperCase() || "Y",
+      ownerName: currentUser?.name || "You",
       subGoals: [],
     };
-    setGoals((prev) => [newGoal, ...prev]);
+    setLocalGoals([newGoal, ...goals]);
     setNewName("");
     setNewDescription("");
     setNewStatus("on_track");
@@ -206,7 +209,7 @@ export default function GoalsPage() {
       list
         .filter((g) => g.id !== id)
         .map((g) => ({ ...g, subGoals: removeGoal(g.subGoals) }));
-    setGoals((prev) => removeGoal(prev));
+    setLocalGoals(removeGoal(goals));
   };
 
   const handleUpdateStatus = (id: string, status: string) => {
@@ -216,7 +219,7 @@ export default function GoalsPage() {
           ? { ...g, status }
           : { ...g, subGoals: updateGoal(g.subGoals) }
       );
-    setGoals((prev) => updateGoal(prev));
+    setLocalGoals(updateGoal(goals));
   };
 
   const filtered = goals.filter((g) => {
