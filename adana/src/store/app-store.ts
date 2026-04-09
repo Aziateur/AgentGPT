@@ -1,12 +1,9 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 import {
-  mockUsers,
   mockProjects,
   mockSections,
   mockTasks,
-  mockNotifications,
-  mockCurrentUser,
 } from "@/lib/mock-data";
 import type { User, Project, Section, Task, Notification } from "@/types";
 
@@ -119,6 +116,8 @@ function dbToUser(r: Record<string, unknown>): User {
 // Store types
 // ---------------------------------------------------------------------------
 
+const EMPTY_USER: User = { id: "", name: "Guest", email: "", avatar: null };
+
 interface AppState {
   // Data
   users: User[];
@@ -131,6 +130,7 @@ interface AppState {
   // State flags
   initialized: boolean;
   loading: boolean;
+  error: string | null;
 
   // Init
   init: () => Promise<void>;
@@ -173,13 +173,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   sections: [],
   tasks: [],
   notifications: [],
-  currentUser: mockCurrentUser,
+  currentUser: EMPTY_USER,
   initialized: false,
   loading: false,
+  error: null,
 
   init: async () => {
     if (get().initialized) return;
-    set({ loading: true });
+    set({ loading: true, error: null });
 
     try {
       // Fetch all data from Supabase in parallel
@@ -200,10 +201,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       let sections = (sectionsRes.data || []).map(dbToSection);
       let tasks = (tasksRes.data || []).map(dbToTask);
 
-      // If DB is empty, seed it with mock data
+      // Auto-seed empty DB on first load
       if (projects.length === 0) {
         await seedSupabase();
-        // Re-fetch after seeding
         const [p2, s2, t2] = await Promise.all([
           supabase.from("projects").select("*").order("created_at", { ascending: false }),
           supabase.from("sections").select("*").order("position", { ascending: true }),
@@ -214,29 +214,33 @@ export const useAppStore = create<AppState>((set, get) => ({
         tasks = (t2.data || []).map(dbToTask);
       }
 
-      const currentUser = users.find((u) => u.id === "demo-user") || users[0] || mockCurrentUser;
+      const currentUser =
+        users.find((u) => u.id === "demo-user") || users[0] || EMPTY_USER;
 
       set({
-        users: users.length ? users : mockUsers,
+        users,
         projects,
         sections,
         tasks,
-        notifications: mockNotifications, // notifications aren't in Supabase yet
+        notifications: [],
         currentUser,
         initialized: true,
         loading: false,
+        error: null,
       });
     } catch (err) {
-      console.warn("Supabase fetch failed, using mock data:", err);
+      console.error("Supabase fetch failed:", err);
+      // No mock fallback - show empty state with error
       set({
-        users: mockUsers,
-        projects: mockProjects,
-        sections: mockSections,
-        tasks: mockTasks,
-        notifications: mockNotifications,
-        currentUser: mockCurrentUser,
+        users: [],
+        projects: [],
+        sections: [],
+        tasks: [],
+        notifications: [],
+        currentUser: EMPTY_USER,
         initialized: true,
         loading: false,
+        error: err instanceof Error ? err.message : "Failed to load data",
       });
     }
   },
@@ -259,7 +263,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     set((s) => ({ projects: [project, ...s.projects] }));
 
-    // Also create default sections
     const defaultSections: Section[] = [
       { id: crypto.randomUUID(), name: "To Do", position: 0, projectId: id },
       { id: crypto.randomUUID(), name: "In Progress", position: 1, projectId: id },
@@ -267,13 +270,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     ];
     set((s) => ({ sections: [...s.sections, ...defaultSections] }));
 
-    // Write to Supabase
     try {
       await supabase.from("projects").insert(projectToDb(project));
       for (const sec of defaultSections) {
         await supabase.from("sections").insert(sectionToDb(sec));
       }
-    } catch {}
+    } catch (err) {
+      console.error("Failed to create project in Supabase:", err);
+    }
 
     return project;
   },
@@ -284,7 +288,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
     try {
       await supabase.from("projects").update(projectToDb(updates)).eq("id", id);
-    } catch {}
+    } catch (err) {
+      console.error("Failed to update project in Supabase:", err);
+    }
   },
 
   deleteProject: async (id) => {
@@ -297,7 +303,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       await supabase.from("tasks").delete().eq("project_id", id);
       await supabase.from("sections").delete().eq("project_id", id);
       await supabase.from("projects").delete().eq("id", id);
-    } catch {}
+    } catch (err) {
+      console.error("Failed to delete project in Supabase:", err);
+    }
   },
 
   toggleFavorite: async (id) => {
@@ -309,7 +317,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
     try {
       await supabase.from("projects").update({ favorite: newFav }).eq("id", id);
-    } catch {}
+    } catch (err) {
+      console.error("Failed to toggle favorite in Supabase:", err);
+    }
   },
 
   // -- Task mutations -------------------------------------------------------
@@ -341,7 +351,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     try {
       await supabase.from("tasks").insert(taskToDb(task));
-    } catch {}
+    } catch (err) {
+      console.error("Failed to create task in Supabase:", err);
+    }
 
     return task;
   },
@@ -352,14 +364,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
     try {
       await supabase.from("tasks").update(taskToDb(updates)).eq("id", id);
-    } catch {}
+    } catch (err) {
+      console.error("Failed to update task in Supabase:", err);
+    }
   },
 
   deleteTask: async (id) => {
     set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }));
     try {
       await supabase.from("tasks").delete().eq("id", id);
-    } catch {}
+    } catch (err) {
+      console.error("Failed to delete task in Supabase:", err);
+    }
   },
 
   toggleTaskComplete: async (id) => {
@@ -372,7 +388,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
     try {
       await supabase.from("tasks").update({ completed, completed_at: completedAt }).eq("id", id);
-    } catch {}
+    } catch (err) {
+      console.error("Failed to toggle task complete in Supabase:", err);
+    }
   },
 
   // -- Section mutations ----------------------------------------------------
@@ -390,7 +408,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     try {
       await supabase.from("sections").insert(sectionToDb(section));
-    } catch {}
+    } catch (err) {
+      console.error("Failed to create section in Supabase:", err);
+    }
 
     return section;
   },
@@ -401,11 +421,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
     try {
       await supabase.from("sections").update({ name }).eq("id", id);
-    } catch {}
+    } catch (err) {
+      console.error("Failed to update section in Supabase:", err);
+    }
   },
 
   deleteSection: async (id) => {
-    // Move tasks to no section
     set((s) => ({
       sections: s.sections.filter((sec) => sec.id !== id),
       tasks: s.tasks.map((t) => (t.sectionId === id ? { ...t, sectionId: null } : t)),
@@ -413,7 +434,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       await supabase.from("tasks").update({ section_id: null }).eq("section_id", id);
       await supabase.from("sections").delete().eq("id", id);
-    } catch {}
+    } catch (err) {
+      console.error("Failed to delete section in Supabase:", err);
+    }
   },
 
   // -- Notification mutations -----------------------------------------------
@@ -469,20 +492,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Seed helper: insert mock data into empty Supabase
+// Seed helper: used only to populate an empty Supabase database
 // ---------------------------------------------------------------------------
 
 async function seedSupabase() {
   try {
-    // Insert projects
     for (const p of mockProjects) {
       await supabase.from("projects").upsert(projectToDb(p));
     }
-    // Insert sections
     for (const s of mockSections) {
       await supabase.from("sections").upsert(sectionToDb(s));
     }
-    // Insert tasks
     for (const t of mockTasks) {
       await supabase.from("tasks").upsert(taskToDb(t));
     }
