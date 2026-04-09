@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useAppStore } from "@/store/app-store";
+import type { Task, Project } from "@/types";
 
-import Link from "next/link";
-import { mockUser, mockProjects, mockTasks } from "@/lib/mock-data";
+
 
 const priorityColor: Record<string, string> = {
   high: "text-red-600 bg-red-50",
@@ -41,7 +41,7 @@ export default function HomePage() {
 
   const user = currentUser ?? { id: "demo", name: "Demo User", email: "demo@adana.dev" };
 
-  const allTasks = tasks as Array<Record<string, unknown>>;
+  const allTasks = tasks as Task[];
 
   const upcomingTasks = allTasks
     .filter((t) => !t.completed && t.dueDate)
@@ -56,7 +56,7 @@ export default function HomePage() {
     (t) => !t.completed && t.dueDate && new Date(t.dueDate as string) < new Date()
   ).length;
 
-  const allProjects = projects as Array<Record<string, unknown>>;
+  const allProjects = projects as Project[];
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 p-6">

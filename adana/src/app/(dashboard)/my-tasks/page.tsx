@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAppStore } from "@/store/app-store";
 import type { Task } from "@/types";
-import { getMyTasks as getMockTasks, mockTasks } from "@/lib/mock-data";
+
 
 // -- Helpers ------------------------------------------------------------------
 
@@ -65,7 +65,7 @@ export default function MyTasksPage() {
     { key: "later", label: "Later", count: laterTasks.length },
   ];
 
-  function handleAddTask() {
+  async function handleAddTask() {
     if (!newTaskName.trim()) return;
     await createTask({ title: newTaskName.trim() });
     setNewTaskName("");
