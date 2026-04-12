@@ -20,10 +20,12 @@ import {
   ChevronDown,
   Settings as SettingsIcon,
   Trash2,
+  X,
 } from "lucide-react";
 import { useAppStore } from "@/stores/app-store";
 import { useAppStore as useDataStore } from "@/store/app-store";
 import { cn } from "@/lib/utils";
+import { InviteModal } from "@/components/invite-modal";
 
 // ---------------------------------------------------------------------------
 // Animation variants
@@ -187,6 +189,19 @@ export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: Si
   const { currentUser, sidebarCollapsed, toggleSidebar, setSidebarCollapsed } = useAppStore();
 
   const [insightsOpen, setInsightsOpen] = useState(true);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+
+  // Compute trial days left from currentUser.createdAt
+  const trialDaysLeft = (() => {
+    const createdAt = (currentUser as any)?.createdAt;
+    if (!createdAt) return 30;
+    const created = new Date(createdAt).getTime();
+    if (isNaN(created)) return 30;
+    const daysSince = Math.floor((Date.now() - created) / (1000 * 60 * 60 * 24));
+    return 30 - daysSince;
+  })();
+  const showTrialBar = trialDaysLeft > 0 && trialDaysLeft <= 30;
 
   // Hydrate collapsed state from dedicated localStorage key (requirement)
   useEffect(() => {
@@ -506,7 +521,7 @@ export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: Si
           active={pathname === "/trash"}
         />
         <button
-          onClick={() => {}}
+          onClick={() => setInviteOpen(true)}
           className={cn(
             "flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-sidebar-text transition-colors hover:bg-sidebar-hover hover:text-sidebar-text-active",
             sidebarCollapsed && "justify-center px-0"
@@ -527,7 +542,81 @@ export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: Si
             )}
           </AnimatePresence>
         </button>
+
+        {/* Trial status bar */}
+        {showTrialBar && !sidebarCollapsed && (
+          <div className="mt-2 rounded-md border border-sidebar-hover bg-sidebar-hover/40 p-2.5">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+              <span className="text-[11px] font-semibold text-sidebar-text-active">
+                {trialDaysLeft} day{trialDaysLeft === 1 ? "" : "s"} left
+              </span>
+            </div>
+            <p className="mt-0.5 text-[10px] text-sidebar-text">
+              Adana Pro trial
+            </p>
+            <button
+              onClick={() => setUpgradeOpen(true)}
+              className="mt-2 w-full rounded-md bg-adana-600 px-2 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-adana-700"
+            >
+              Upgrade
+            </button>
+          </div>
+        )}
+        {showTrialBar && sidebarCollapsed && (
+          <button
+            onClick={() => setUpgradeOpen(true)}
+            className="mt-1 flex w-full items-center justify-center rounded-md p-1.5 text-amber-400 hover:bg-sidebar-hover"
+            aria-label={`${trialDaysLeft} days left — Upgrade`}
+            title={`${trialDaysLeft} days left — Upgrade`}
+          >
+            <Sparkles className="h-4 w-4" />
+          </button>
+        )}
       </div>
+
+      <InviteModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
+
+      {upgradeOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setUpgradeOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl bg-white shadow-2xl dark:bg-surface-dark"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-gray-700">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-amber-500" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Upgrade to Adana Pro
+                </h3>
+              </div>
+              <button
+                onClick={() => setUpgradeOpen(false)}
+                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5">
+              <p className="text-sm text-gray-700 dark:text-gray-300">
+                Upgrade to Adana Pro — <span className="font-semibold">$0/month</span> during demo. Contact support.
+              </p>
+            </div>
+            <div className="flex justify-end border-t border-gray-100 px-5 py-3 dark:border-gray-700">
+              <button
+                onClick={() => setUpgradeOpen(false)}
+                className="rounded-md bg-adana-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-adana-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </motion.aside>
   );
 }

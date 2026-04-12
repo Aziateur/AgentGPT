@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import type { ProjectView } from "@/types";
 import { SmartChat } from "@/components/ai/smart-chat";
 import { getDefaultProvider } from "@/lib/ai/settings";
+import { GlobalSearchOverlay } from "@/components/search/global-search-overlay";
 
 // ---------------------------------------------------------------------------
 // View switcher configuration
@@ -110,6 +111,7 @@ export function Header() {
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const createBtnRef = useRef<HTMLButtonElement | null>(null);
 
   const isProjectPage = pathname.startsWith("/project/");
@@ -262,8 +264,14 @@ export function Header() {
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              onFocus={() => setSearchFocused(true)}
+              onFocus={(e) => {
+                setSearchFocused(true);
+                e.currentTarget.blur();
+                setGlobalSearchOpen(true);
+              }}
+              onClick={() => setGlobalSearchOpen(true)}
               onBlur={() => setSearchFocused(false)}
+              readOnly
               onKeyDown={(e) => {
                 if (e.key === "Enter" && searchQuery.trim()) {
                   router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
@@ -414,6 +422,12 @@ export function Header() {
           </div>
         </div>
       </header>
+
+      {/* Global search overlay ---------------------------------------- */}
+      <GlobalSearchOverlay
+        open={globalSearchOpen}
+        onClose={() => setGlobalSearchOpen(false)}
+      />
 
       {/* AI side drawer ------------------------------------------------ */}
       {aiPanelOpen && (

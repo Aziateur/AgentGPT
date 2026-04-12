@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { UserPlus, Trash2, Plus } from "lucide-react";
+import { UserPlus, Trash2, Plus, Sparkles, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { useAppStore } from "@/store/app-store";
 import { Button } from "@/components/ui/button";
-import type { Task } from "@/types";
+import type { Task, TaskDependencyEdge } from "@/types";
+import { getDefaultProvider } from "@/lib/ai/settings";
+import { smartSummary } from "@/lib/ai/features";
+import { SmartChat } from "@/components/ai/smart-chat";
 
 // -- Helpers ------------------------------------------------------------------
 
@@ -74,6 +77,7 @@ export default function OverviewViewClient() {
   const searchParams = useSearchParams();
   const id = searchParams?.get("id") as string;
 
+  const store = useAppStore();
   const {
     projects,
     users,
@@ -85,7 +89,8 @@ export default function OverviewViewClient() {
     addProjectMember,
     removeProjectMember,
     postProjectStatus,
-  } = useAppStore();
+  } = store;
+  const taskDeps = ((store as unknown as { taskDeps?: TaskDependencyEdge[] }).taskDeps) ?? [];
 
   const project = projects.find((p) => p.id === id);
   const allTasks = getProjectTasks(id);
@@ -152,6 +157,135 @@ export default function OverviewViewClient() {
   }).length;
 
   const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  // -- AI Summary state ------------------------------------------------------
+  const [includeActivity, setIncludeActivity] = useState(true);
+  const [includeRisk, setIncludeRisk] = useState(true);
+  const [activitySummary, setActivitySummary] = useState<string>("");
+  const [riskSummary, setRiskSummary] = useState<string>("");
+  const [aiLoadingActivity, setAiLoadingActivity] = useState(false);
+  const [aiLoadingRisk, setAiLoadingRisk] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [regularUpdates, setRegularUpdates] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const aiCache = useRef<{ activity?: string; risk?: string }>({});
+  const providerReady = useMemo(() => getDefaultProvider() != null, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !id) return;
+    setRegularUpdates(
+      window.localStorage.getItem(`adana:ai-regular-updates:${id}`) === "1"
+    );
+  }, [id]);
+
+  const blockedTaskIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const d of taskDeps) set.add(d.blockedTaskId);
+    return set;
+  }, [taskDeps]);
+
+  const recentTasks = useMemo(() => {
+    return allTasks
+      .slice()
+      .sort((a, b) => {
+        const at = new Date((a as any).updatedAt || (a as any).createdAt || 0).getTime();
+        const bt = new Date((b as any).updatedAt || (b as any).createdAt || 0).getTime();
+        return bt - at;
+      })
+      .slice(0, 10);
+  }, [allTasks]);
+
+  const onToggleRegular = (v: boolean) => {
+    setRegularUpdates(v);
+    if (typeof window !== "undefined" && id) {
+      window.localStorage.setItem(
+        `adana:ai-regular-updates:${id}`,
+        v ? "1" : "0"
+      );
+    }
+    const msg = v
+      ? "Will auto-generate weekly when enabled"
+      : "Regular updates disabled";
+    if (typeof document !== "undefined") {
+      const el = document.createElement("div");
+      el.textContent = msg;
+      el.className =
+        "fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] rounded-lg bg-gray-900 px-4 py-2 text-sm text-white shadow-lg";
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 1800);
+    }
+  };
+
+  const handleGenerate = async () => {
+    setAiError(null);
+    const provider = getDefaultProvider();
+    if (!provider) {
+      setAiError("No AI provider configured.");
+      return;
+    }
+    const tasks: { type: "task"; title: string; description?: string }[] = recentTasks.map(
+      (t) => ({
+        type: "task",
+        title: t.title,
+        description:
+          (t.description ?? "") +
+          (t.completed ? " [completed]" : " [open]"),
+      })
+    );
+    const riskItems: { type: "task"; title: string; description?: string }[] = recentTasks.map(
+      (t) => ({
+        type: "task",
+        title: t.title,
+        description:
+          "due " +
+          (t.dueDate ?? "none") +
+          (blockedTaskIds.has(t.id) ? " BLOCKED" : ""),
+      })
+    );
+    const ops: Promise<void>[] = [];
+    if (includeActivity) {
+      setAiLoadingActivity(true);
+      ops.push(
+        smartSummary(provider, tasks)
+          .then((out) => {
+            aiCache.current.activity = out;
+            setActivitySummary(out);
+          })
+          .catch((e: any) => setAiError(String(e?.message || e)))
+          .finally(() => setAiLoadingActivity(false))
+      );
+    }
+    if (includeRisk) {
+      setAiLoadingRisk(true);
+      ops.push(
+        smartSummary(provider, riskItems)
+          .then((out) => {
+            aiCache.current.risk = out;
+            setRiskSummary(out);
+          })
+          .catch((e: any) => setAiError(String(e?.message || e)))
+          .finally(() => setAiLoadingRisk(false))
+      );
+    }
+    await Promise.all(ops);
+  };
+
+  const chatPrompt = useMemo(() => {
+    if (!project) return "";
+    const taskLines = allTasks
+      .slice(0, 30)
+      .map(
+        (t) =>
+          `- [${t.completed ? "x" : " "}] ${t.title}` +
+          (t.dueDate ? ` (due ${t.dueDate})` : "")
+      )
+      .join("\n");
+    return (
+      `You are an AI assistant helping with the project "${project.name}".\n` +
+      (project.description ? `Description: ${project.description}\n` : "") +
+      `\nTasks (${allTasks.length} total):\n${taskLines || "(none)"}`
+    );
+  }, [project, allTasks]);
 
   if (!project) {
     return (
@@ -316,6 +450,137 @@ export default function OverviewViewClient() {
                     </button>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* AI Summary */}
+          <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-indigo-600" />
+                <h3 className="text-sm font-semibold text-gray-900">AI Summary</h3>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={regularUpdates}
+                    onChange={(e) => onToggleRegular(e.target.checked)}
+                  />
+                  Get regular updates
+                </label>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleGenerate}
+                  disabled={!providerReady || (!includeActivity && !includeRisk) || aiLoadingActivity || aiLoadingRisk}
+                >
+                  {aiLoadingActivity || aiLoadingRisk ? "Generating…" : "Generate"}
+                </Button>
+              </div>
+            </div>
+            <div className="p-4">
+              {!providerReady ? (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  <Link href="/settings/ai" className="font-medium underline">
+                    Configure AI in Settings → AI
+                  </Link>{" "}
+                  to enable summaries.
+                </div>
+              ) : (
+                <>
+                  {aiError && (
+                    <p className="mb-3 rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700">
+                      {aiError}
+                    </p>
+                  )}
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {/* Recent Activity */}
+                    <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                      <label className="mb-2 flex items-center gap-2 text-xs font-medium text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={includeActivity}
+                          onChange={(e) => setIncludeActivity(e.target.checked)}
+                        />
+                        Include Recent Activity
+                      </label>
+                      <div className="min-h-[60px] whitespace-pre-wrap text-sm text-gray-800">
+                        {aiLoadingActivity ? (
+                          <span className="inline-flex items-center gap-1.5 text-gray-500">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Generating…
+                          </span>
+                        ) : activitySummary ? (
+                          activitySummary
+                        ) : (
+                          <span className="text-xs text-gray-400">
+                            Click Generate to summarize the 10 most recent tasks.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {/* Risk Report */}
+                    <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                      <label className="mb-2 flex items-center gap-2 text-xs font-medium text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={includeRisk}
+                          onChange={(e) => setIncludeRisk(e.target.checked)}
+                        />
+                        Include Risk Report
+                      </label>
+                      <div className="min-h-[60px] whitespace-pre-wrap text-sm text-gray-800">
+                        {aiLoadingRisk ? (
+                          <span className="inline-flex items-center gap-1.5 text-gray-500">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Generating…
+                          </span>
+                        ) : riskSummary ? (
+                          riskSummary
+                        ) : (
+                          <span className="text-xs text-gray-400">
+                            Click Generate to surface due-date and blocker risks.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Ask AI about this project */}
+          <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+            <button
+              type="button"
+              onClick={() => setChatOpen((v) => !v)}
+              className="flex w-full items-center justify-between border-b border-gray-100 px-5 py-3 text-left"
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-indigo-600" />
+                <h3 className="text-sm font-semibold text-gray-900">
+                  Ask AI about this project
+                </h3>
+              </div>
+              {chatOpen ? (
+                <ChevronDown className="h-4 w-4 text-gray-500" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-gray-500" />
+              )}
+            </button>
+            {chatOpen && (
+              <div className="h-[420px] p-4">
+                <SmartChat
+                  contextSystemPrompt={chatPrompt}
+                  suggestedPrompts={[
+                    "Find risks in this project",
+                    "Summarize recent decisions in this project",
+                    "Summarize latest activity in this project",
+                  ]}
+                />
               </div>
             )}
           </div>

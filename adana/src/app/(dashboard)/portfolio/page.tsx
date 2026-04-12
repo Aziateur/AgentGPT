@@ -18,6 +18,7 @@ import {
 import { useAppStore } from "@/store/app-store";
 import { smartSummary } from "@/lib/ai/features";
 import { getDefaultProvider } from "@/lib/ai/settings";
+import { SmartChat } from "@/components/ai/smart-chat";
 import type { Task, User, Project } from "@/types";
 
 type TabKey = "list" | "timeline" | "dashboard" | "progress" | "workload";
@@ -159,9 +160,11 @@ export default function PortfolioDetailPage() {
       {tab === "progress" && (
         <ProgressTab
           projects={linkedProjects}
+          portfolioTasks={portfolioTasks}
           statusUpdates={projectStatusUpdates}
           postProjectStatus={postProjectStatus}
           portfolioId={portfolio.id}
+          portfolioName={portfolio.name}
         />
       )}
       {tab === "workload" && (
@@ -440,14 +443,18 @@ function Counter({ label, value }: { label: string; value: number }) {
 
 function ProgressTab({
   projects,
+  portfolioTasks,
   statusUpdates,
   postProjectStatus,
   portfolioId,
+  portfolioName,
 }: {
   projects: Project[];
+  portfolioTasks: Task[];
   statusUpdates: any[];
   postProjectStatus: (projectId: string, status: string, text?: string) => Promise<void>;
   portfolioId: string;
+  portfolioName: string;
 }) {
   const [summary, setSummary] = useState<string>("");
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -518,10 +525,18 @@ function ProgressTab({
       const items = projects.map((p) => {
         const u = latestByProject.find((x) => x.project.id === p.id)?.update;
         const statusText = p.statusText ?? u?.text ?? "";
+        const projTasks = portfolioTasks.filter((t) => t.projectId === p.id);
+        const completed = projTasks.filter((t) => t.completed).length;
+        const pct = projTasks.length
+          ? Math.round((completed / projTasks.length) * 100)
+          : 0;
+        const stats = `${completed}/${projTasks.length} tasks complete (${pct}%)`;
         return {
           type: "project" as const,
           title: p.name,
-          description: statusText || p.description || undefined,
+          description: [stats, statusText || p.description]
+            .filter(Boolean)
+            .join(" — "),
           status: u?.status ?? (p as any).status ?? "on_track",
         };
       });
@@ -533,6 +548,24 @@ function ProgressTab({
       setSummaryLoading(false);
     }
   };
+
+  const chatPrompt = useMemo(() => {
+    const lines = projects
+      .map((p) => {
+        const projTasks = portfolioTasks.filter((t) => t.projectId === p.id);
+        const completed = projTasks.filter((t) => t.completed).length;
+        const status =
+          latestByProject.find((x) => x.project.id === p.id)?.update?.status ??
+          (p as any).status ??
+          "on_track";
+        return `- ${p.name} [${status}] ${completed}/${projTasks.length} tasks complete`;
+      })
+      .join("\n");
+    return (
+      `You are an AI assistant for the portfolio "${portfolioName}".\n` +
+      `Projects (${projects.length}):\n${lines || "(none)"}`
+    );
+  }, [portfolioName, projects, portfolioTasks, latestByProject]);
 
   const onSubmitStatus = async () => {
     if (!formProjectId) return;
@@ -689,6 +722,21 @@ function ProgressTab({
             ))}
           </ul>
         )}
+      </div>
+
+      {/* AI Chat */}
+      <div className="h-[440px] rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="h-full p-3">
+          <SmartChat
+            title="Ask AI about this portfolio"
+            contextSystemPrompt={chatPrompt}
+            suggestedPrompts={[
+              "Summarize portfolio status",
+              "Which projects are at risk?",
+              "What's the biggest risk across projects?",
+            ]}
+          />
+        </div>
       </div>
     </div>
   );

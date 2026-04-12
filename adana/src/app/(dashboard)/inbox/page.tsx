@@ -1,16 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import {
+  ArrowDownUp,
+  ArrowDown,
+  ArrowUp,
+  Archive,
+  Bookmark,
+  BookmarkCheck,
+  Circle,
+  LayoutGrid,
+  List as ListIcon,
+  Plus,
+} from "lucide-react";
 import { useAppStore } from "@/store/app-store";
-import type { Notification } from "@/types";
-import { mockNotifications } from "@/lib/mock-data";
 
 // -- Helpers ------------------------------------------------------------------
 
 function timeAgo(iso: string | Date) {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h ago`;
@@ -50,7 +61,32 @@ const typeLabel: Record<string, string> = {
   dependency_resolved: "Resolved",
 };
 
-type FilterKey = "all" | string;
+const BOOKMARKS_KEY = "adana:notification-bookmarks";
+
+function loadBookmarks(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(BOOKMARKS_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw) as string[];
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveBookmarks(set: Set<string>) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(BOOKMARKS_KEY, JSON.stringify([...set]));
+  } catch {
+    // ignore
+  }
+}
+
+type TabKey = "activity" | "bookmarks" | "archive";
+type SortDir = "newest" | "oldest";
+type ViewMode = "list" | "card";
 
 // -- Component ----------------------------------------------------------------
 
@@ -58,34 +94,50 @@ export default function InboxPage() {
   const store = useAppStore();
   const { loading, markNotificationRead, markAllNotificationsRead, archiveNotification } = store;
   const getMyNotifications = (store as any).getMyNotifications as undefined | (() => any[]);
-  // Prefer DB-backed user-filtered stream; fall back to legacy array.
   const notifications = getMyNotifications ? getMyNotifications() : store.notifications;
-  const [filter, setFilter] = useState<FilterKey>("all");
 
-  const filters: { key: FilterKey; label: string }[] = [
-    { key: "all", label: "All" },
-    { key: "assigned", label: "Assigned" },
-    { key: "commented", label: "Comments" },
-    { key: "completed", label: "Completed" },
-    { key: "mentioned", label: "Mentions" },
-  ];
+  const [tab, setTab] = useState<TabKey>("activity");
+  const [sortDir, setSortDir] = useState<SortDir>("newest");
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [bookmarks, setBookmarks] = useState<Set<string>>(() => new Set());
+  const [plusTooltip, setPlusTooltip] = useState(false);
 
-  const visible = notifications.filter((n: Notification) => {
-    if (n.archived) return false;
-    if (filter !== "all" && n.type !== filter) return false;
-    return true;
-  });
+  useEffect(() => {
+    setBookmarks(loadBookmarks());
+  }, []);
 
-  const unreadCount = notifications.filter((n: Notification) => !n.read && !n.archived).length;
-
-  function toggleRead(id: string) {
-    const n = notifications.find((notif: Notification) => notif.id === id);
-    if (n && !n.read) {
-      markNotificationRead(id);
-    }
+  function toggleBookmark(id: string) {
+    setBookmarks((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      saveBookmarks(next);
+      return next;
+    });
   }
 
-  function getLinkHref(n: Notification) {
+  const visible = useMemo(() => {
+    const list = (notifications as any[]).filter((n) => {
+      if (tab === "archive") return n.archived;
+      if (tab === "bookmarks") return bookmarks.has(n.id) && !n.archived;
+      return !n.archived;
+    });
+    list.sort((a, b) => {
+      const da = new Date(a.createdAt).getTime();
+      const db = new Date(b.createdAt).getTime();
+      return sortDir === "newest" ? db - da : da - db;
+    });
+    return list;
+  }, [notifications, tab, sortDir, bookmarks]);
+
+  const unreadCount = (notifications as any[]).filter((n) => !n.read && !n.archived).length;
+
+  function toggleRead(id: string) {
+    const n = (notifications as any[]).find((notif) => notif.id === id);
+    if (n && !n.read) markNotificationRead(id);
+  }
+
+  function getLinkHref(n: any) {
     if (n.linkUrl) return n.linkUrl;
     return "/inbox";
   }
@@ -93,8 +145,8 @@ export default function InboxPage() {
   if (loading) {
     return (
       <div className="mx-auto max-w-3xl p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Inbox</h1>
-        <div className="animate-pulse space-y-3">
+        <h1 className="text-2xl font-bold text-gray-900">Inbox</h1>
+        <div className="mt-6 animate-pulse space-y-3">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-16 rounded-lg bg-gray-100" />
           ))}
@@ -103,10 +155,16 @@ export default function InboxPage() {
     );
   }
 
+  const tabs: { key: TabKey; label: string }[] = [
+    { key: "activity", label: "Activity" },
+    { key: "bookmarks", label: "Bookmarks" },
+    { key: "archive", label: "Archive" },
+  ];
+
   return (
     <div className="mx-auto max-w-3xl p-6">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-gray-900">Inbox</h1>
           {unreadCount > 0 && (
@@ -125,103 +183,241 @@ export default function InboxPage() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="mb-4 flex flex-wrap gap-2">
-        {filters.map((f) => (
-          <button
-            key={f.key}
-            onClick={() => setFilter(f.key)}
-            className={`rounded-full px-3 py-1 text-sm font-medium transition ${
-              filter === f.key
-                ? "bg-indigo-100 text-indigo-700"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
+      {/* Tabs + controls */}
+      <div className="mb-4 flex items-center justify-between border-b border-gray-200">
+        <div className="flex items-center gap-1">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${
+                tab === t.key
+                  ? "border-indigo-600 text-indigo-700"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+          <div
+            className="relative"
+            onMouseEnter={() => setPlusTooltip(true)}
+            onMouseLeave={() => setPlusTooltip(false)}
           >
-            {f.label}
+            <button
+              disabled
+              aria-label="Add custom inbox"
+              className="-mb-px ml-1 flex h-8 w-8 cursor-not-allowed items-center justify-center rounded text-gray-400"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+            {plusTooltip && (
+              <div className="absolute left-1/2 top-full z-10 mt-1 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white shadow">
+                Custom inboxes coming soon
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 pb-2">
+          {/* Sort arrows */}
+          <button
+            onClick={() => setSortDir((d) => (d === "newest" ? "oldest" : "newest"))}
+            title={sortDir === "newest" ? "Newest first" : "Oldest first"}
+            className="flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+          >
+            {sortDir === "newest" ? (
+              <ArrowDown className="h-3.5 w-3.5" />
+            ) : (
+              <ArrowUp className="h-3.5 w-3.5" />
+            )}
+            <span className="hidden sm:inline">
+              {sortDir === "newest" ? "Newest" : "Oldest"}
+            </span>
+            <ArrowDownUp className="h-3 w-3 text-gray-400" />
           </button>
-        ))}
+
+          {/* View toggle */}
+          <div className="flex items-center rounded-md border border-gray-200 bg-white p-0.5">
+            <button
+              onClick={() => setViewMode("list")}
+              title="List view"
+              className={`flex h-6 w-6 items-center justify-center rounded ${
+                viewMode === "list" ? "bg-indigo-100 text-indigo-700" : "text-gray-500"
+              }`}
+            >
+              <ListIcon className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setViewMode("card")}
+              title="Card view"
+              className={`flex h-6 w-6 items-center justify-center rounded ${
+                viewMode === "card" ? "bg-indigo-100 text-indigo-700" : "text-gray-500"
+              }`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Notifications list */}
-      <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-        {visible.length === 0 ? (
-          <div className="px-6 py-16 text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gray-100">
-              <svg className="h-7 w-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
-                />
-              </svg>
-            </div>
-            <p className="text-base font-medium text-gray-900">All caught up!</p>
-            <p className="mt-1 text-sm text-gray-500">
-              No notifications to show. Check back later.
-            </p>
-          </div>
-        ) : (
+      {/* Notifications */}
+      {visible.length === 0 ? (
+        <div className="rounded-xl border border-gray-200 bg-white px-6 py-20 text-center shadow-sm">
+          <div className="mb-3 text-5xl">🎉</div>
+          <p className="text-base font-medium text-gray-900">
+            Hooray, you&apos;re up to date.
+          </p>
+        </div>
+      ) : viewMode === "list" ? (
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
           <ul className="divide-y divide-gray-100">
-            {visible.map((n: Notification) => (
-              <li
+            {visible.map((n: any) => {
+              const isBookmarked = bookmarks.has(n.id);
+              return (
+                <li
+                  key={n.id}
+                  className={`group flex items-start gap-3 px-5 py-3 transition ${
+                    !n.read ? "bg-indigo-50/40" : "hover:bg-gray-50"
+                  }`}
+                >
+                  <div
+                    className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                      typeIcon[n.type] || "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    {(typeLabel[n.type] || n.type)?.[0]?.toUpperCase() || "N"}
+                  </div>
+
+                  <Link href={getLinkHref(n)} className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-gray-900">{n.title}</p>
+                    {n.message && (
+                      <p className="mt-0.5 line-clamp-1 text-sm text-gray-600">
+                        {n.message}
+                      </p>
+                    )}
+                    <p className="mt-1 text-xs text-gray-400">{timeAgo(n.createdAt)}</p>
+                  </Link>
+
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      onClick={() => toggleBookmark(n.id)}
+                      title={isBookmarked ? "Remove bookmark" : "Bookmark"}
+                      className={`rounded p-1 transition ${
+                        isBookmarked
+                          ? "text-yellow-500"
+                          : "text-gray-300 opacity-0 hover:text-gray-600 group-hover:opacity-100"
+                      }`}
+                    >
+                      {isBookmarked ? (
+                        <BookmarkCheck className="h-4 w-4" />
+                      ) : (
+                        <Bookmark className="h-4 w-4" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => toggleRead(n.id)}
+                      title={n.read ? "Read" : "Mark as read"}
+                      className="rounded p-1 text-gray-400 opacity-0 hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100"
+                    >
+                      <Circle
+                        className="h-4 w-4"
+                        fill={n.read ? "none" : "currentColor"}
+                      />
+                    </button>
+                    <button
+                      onClick={() => archiveNotification(n.id)}
+                      title="Archive"
+                      className="rounded p-1 text-gray-400 opacity-0 hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100"
+                    >
+                      <Archive className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {!n.read && (
+                    <div className="mt-2 h-2 w-2 shrink-0 rounded-full bg-indigo-600" />
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {visible.map((n: any) => {
+            const isBookmarked = bookmarks.has(n.id);
+            const actorInitial =
+              (typeLabel[n.type] || n.type || "N")?.[0]?.toUpperCase() || "N";
+            return (
+              <div
                 key={n.id}
-                className={`group flex items-start gap-3 px-5 py-4 transition ${
-                  !n.read ? "bg-indigo-50/40" : "hover:bg-gray-50"
+                className={`group flex flex-col gap-2 rounded-xl border p-4 shadow-sm transition ${
+                  !n.read
+                    ? "border-indigo-200 bg-indigo-50/40"
+                    : "border-gray-200 bg-white hover:bg-gray-50"
                 }`}
               >
-                {/* Icon */}
-                <div
-                  className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${typeIcon[n.type] || "bg-gray-100 text-gray-600"}`}
-                >
-                  {(typeLabel[n.type] || n.type)?.[0]?.toUpperCase() || "N"}
+                <div className="flex items-start gap-3">
+                  <div
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                      typeIcon[n.type] || "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    {actorInitial}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <Link href={getLinkHref(n)}>
+                      <p className="line-clamp-2 text-sm font-medium text-gray-900">
+                        {n.title}
+                      </p>
+                    </Link>
+                    <p className="mt-1 text-xs text-gray-400">
+                      {timeAgo(n.createdAt)}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => toggleBookmark(n.id)}
+                    title={isBookmarked ? "Remove bookmark" : "Bookmark"}
+                    className={`rounded p-1 transition ${
+                      isBookmarked
+                        ? "text-yellow-500"
+                        : "text-gray-300 hover:text-gray-600"
+                    }`}
+                  >
+                    {isBookmarked ? (
+                      <BookmarkCheck className="h-4 w-4" />
+                    ) : (
+                      <Bookmark className="h-4 w-4" />
+                    )}
+                  </button>
                 </div>
-
-                {/* Content */}
-                <Link href={getLinkHref(n)} className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-gray-900">{n.title}</p>
-                  {n.message && (
-                    <p className="mt-0.5 text-sm text-gray-600">{n.message}</p>
-                  )}
-                  <p className="mt-1 text-xs text-gray-400">{timeAgo(n.createdAt)}</p>
-                </Link>
-
-                {/* Actions */}
-                <div className="flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100">
+                {n.message && (
+                  <p className="line-clamp-3 text-sm text-gray-600">{n.message}</p>
+                )}
+                <div className="mt-auto flex items-center justify-end gap-1">
                   <button
                     onClick={() => toggleRead(n.id)}
-                    title={n.read ? "Mark unread" : "Mark read"}
                     className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                    title={n.read ? "Read" : "Mark as read"}
                   >
-                    <svg className="h-4 w-4" fill={n.read ? "none" : "currentColor"} stroke="currentColor" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="3" />
-                    </svg>
+                    <Circle
+                      className="h-4 w-4"
+                      fill={n.read ? "none" : "currentColor"}
+                    />
                   </button>
                   <button
                     onClick={() => archiveNotification(n.id)}
-                    title="Archive"
                     className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                    title="Archive"
                   >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
-                      />
-                    </svg>
+                    <Archive className="h-4 w-4" />
                   </button>
                 </div>
-
-                {/* Unread dot */}
-                {!n.read && (
-                  <div className="mt-2 h-2 w-2 shrink-0 rounded-full bg-indigo-600" />
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

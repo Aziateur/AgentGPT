@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { Plus, X, Settings } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Plus, X, Settings, GripVertical } from "lucide-react";
 import { useAppStore } from "@/store/app-store";
 import type { Task, Project } from "@/types";
 
@@ -52,15 +52,51 @@ function periodStart(period: Period): Date {
   return d;
 }
 
+const ORDER_KEY = "adana:home-widget-order";
+
 function loadWidgets(): HomeWidget[] {
+  let widgets: HomeWidget[] | null = null;
   try {
     const raw = localStorage.getItem("adana:home-widgets");
     if (raw) {
       const parsed = JSON.parse(raw) as HomeWidget[];
-      if (Array.isArray(parsed) && parsed.every((w) => w && w.type && w.id)) return parsed;
+      if (Array.isArray(parsed) && parsed.every((w) => w && w.type && w.id)) {
+        widgets = parsed;
+      }
     }
   } catch {}
-  return DEFAULT_WIDGETS;
+  if (!widgets) widgets = DEFAULT_WIDGETS;
+
+  // Apply saved order from ORDER_KEY (array of widget keys/types)
+  try {
+    const orderRaw = localStorage.getItem(ORDER_KEY);
+    if (orderRaw) {
+      const order = JSON.parse(orderRaw) as string[];
+      if (Array.isArray(order) && order.length > 0) {
+        const byType = new Map<string, HomeWidget[]>();
+        for (const w of widgets) {
+          const arr = byType.get(w.type) ?? [];
+          arr.push(w);
+          byType.set(w.type, arr);
+        }
+        const ordered: HomeWidget[] = [];
+        for (const key of order) {
+          const bucket = byType.get(key);
+          if (bucket && bucket.length > 0) ordered.push(bucket.shift()!);
+        }
+        // Append any remaining widgets not mentioned in order
+        for (const arr of byType.values()) ordered.push(...arr);
+        if (ordered.length === widgets.length) widgets = ordered;
+      }
+    }
+  } catch {}
+  return widgets;
+}
+
+function saveOrder(widgets: HomeWidget[]) {
+  try {
+    localStorage.setItem(ORDER_KEY, JSON.stringify(widgets.map((w) => w.type)));
+  } catch {}
 }
 
 export default function HomePage() {

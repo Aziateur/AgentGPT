@@ -266,11 +266,15 @@ function GoalCard({
 
 // -- Main component -----------------------------------------------------------
 
+type GoalTab = "my" | "team";
+
 export default function GoalsPage() {
   const goalsExt = useAppStore((s) => s.goalsExt);
   const projects = useAppStore((s) => s.projects);
   const users = useAppStore((s) => s.users);
   const currentUser = useAppStore((s) => s.currentUser);
+  const teams = useAppStore((s) => s.teams);
+  const teamMembers = useAppStore((s) => s.teamMembers);
   const createGoal = useAppStore((s) => s.createGoal);
   const updateGoal = useAppStore((s) => s.updateGoal);
   const deleteGoal = useAppStore((s) => s.deleteGoal);
@@ -279,6 +283,7 @@ export default function GoalsPage() {
     (s) => ((s as unknown as { goalContributions?: GoalContribution[] }).goalContributions) ?? []
   );
 
+  const [activeTab, setActiveTab] = useState<GoalTab>("my");
   const [statusFilter, setStatusFilter] = useState<StatusFilterKey>("all");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newName, setNewName] = useState("");
@@ -287,7 +292,28 @@ export default function GoalsPage() {
   const [newPeriod, setNewPeriod] = useState("");
   const [newParentId, setNewParentId] = useState<string | null>(null);
 
-  // Build goal tree from flat list
+  // Tab-scoped set of goals
+  const scopedGoals = useMemo<GoalExt[]>(() => {
+    const uid = currentUser?.id;
+    if (!uid) return goalsExt;
+    if (activeTab === "my") {
+      return goalsExt.filter((g) => g.ownerId === uid);
+    }
+    // Team goals: owner is in one of the user's teams (excluding the user themselves)
+    const myTeamIds = new Set(
+      teamMembers.filter((m) => m.userId === uid).map((m) => m.teamId)
+    );
+    const teammateIds = new Set(
+      teamMembers
+        .filter((m) => myTeamIds.has(m.teamId) && m.userId !== uid)
+        .map((m) => m.userId)
+    );
+    return goalsExt.filter(
+      (g) => g.ownerId && teammateIds.has(g.ownerId)
+    );
+  }, [goalsExt, activeTab, currentUser, teamMembers]);
+
+  // Build goal tree from flat list (tab-scoped)
   const tree = useMemo<GoalNode[]>(() => {
     const byId = new Map<string, GoalNode>();
     const toNode = (g: GoalExt): GoalNode => {
@@ -306,9 +332,9 @@ export default function GoalsPage() {
         subGoals: [],
       };
     };
-    for (const g of goalsExt) byId.set(g.id, toNode(g));
+    for (const g of scopedGoals) byId.set(g.id, toNode(g));
     const roots: GoalNode[] = [];
-    for (const g of goalsExt) {
+    for (const g of scopedGoals) {
       const node = byId.get(g.id)!;
       if (g.parentId && byId.has(g.parentId)) {
         byId.get(g.parentId)!.subGoals.push(node);
@@ -316,8 +342,10 @@ export default function GoalsPage() {
         roots.push(node);
       }
     }
-    return { tree: roots, goalsById: byId };
-  }, [goalsExt, users, currentUser]);
+    return roots;
+  }, [scopedGoals, users, currentUser]);
+  // Silence unused import warning (teams is used indirectly via teamMembers)
+  void teams;
 
   const linkedProjectsByGoal = useMemo(() => {
     const map = new Map<string, Project[]>();
@@ -391,10 +419,12 @@ export default function GoalsPage() {
 
   const flatGoalsForSelect: GoalExt[] = goalsExt;
 
+  const activeFilterCount = statusFilter === "all" ? 0 : 1;
+
   return (
     <div className="mx-auto max-w-4xl p-6">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Goals</h1>
         <button
           onClick={() => openCreateModal(null)}
@@ -407,8 +437,41 @@ export default function GoalsPage() {
         </button>
       </div>
 
+      {/* Tabs */}
+      <div className="mb-6 flex items-center gap-1 border-b border-gray-200">
+        {([
+          { key: "my" as GoalTab, label: "My goals" },
+          { key: "team" as GoalTab, label: "Team goals" },
+        ]).map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setActiveTab(t.key)}
+            className={`relative px-4 py-2 text-sm font-medium transition ${
+              activeTab === t.key
+                ? "text-indigo-600"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {t.label}
+            {activeTab === t.key && (
+              <span className="absolute inset-x-0 -bottom-px h-0.5 bg-indigo-600" />
+            )}
+          </button>
+        ))}
+        <button
+          disabled
+          title="Custom goal lists coming soon"
+          className="cursor-not-allowed px-3 py-2 text-sm font-medium text-gray-300"
+        >
+          +
+        </button>
+      </div>
+
       {/* Filters */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
+        <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
+          Filters: {activeFilterCount}
+        </span>
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-gray-500">Status:</span>
           {(["all", "on_track", "at_risk", "off_track", "achieved"] as StatusFilterKey[]).map((s) => (
@@ -444,14 +507,14 @@ export default function GoalsPage() {
             />
           </svg>
           <p className="text-sm font-medium text-gray-900">
-            {goalsExt.length === 0 ? "No goals yet" : "No goals match this filter"}
+            {scopedGoals.length === 0 ? "No goals yet" : "No goals match this filter"}
           </p>
           <p className="mt-1 text-sm text-gray-500">
-            {goalsExt.length === 0
+            {scopedGoals.length === 0
               ? "Create your first goal to start tracking OKRs."
               : "Try a different filter or create a new goal."}
           </p>
-          {goalsExt.length === 0 && (
+          {scopedGoals.length === 0 && (
             <button
               onClick={() => openCreateModal(null)}
               className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"

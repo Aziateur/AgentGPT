@@ -12,6 +12,7 @@ export interface SmartChatProps {
   title?: string;
   placeholder?: string;
   className?: string;
+  suggestedPrompts?: string[];
 }
 
 type UIMessage = { role: "user" | "assistant"; content: string };
@@ -21,6 +22,7 @@ export function SmartChat({
   title = "Adana AI",
   placeholder = "Ask me anything about your tasks or projects…",
   className,
+  suggestedPrompts,
 }: SmartChatProps) {
   const [messages, setMessages] = React.useState<UIMessage[]>([]);
   const [input, setInput] = React.useState("");
@@ -146,6 +148,21 @@ export function SmartChat({
       </div>
 
       <div className="border-t border-gray-200 p-3 bg-gray-50">
+        {suggestedPrompts && suggestedPrompts.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {suggestedPrompts.map((p, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setInput(p)}
+                disabled={sending || providerReady === false}
+                className="rounded-full border border-indigo-200 bg-white px-2.5 py-1 text-xs text-indigo-700 hover:bg-indigo-50 disabled:opacity-60"
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex items-end gap-2">
           <textarea
             className="flex-1 resize-none rounded-lg border border-gray-300 bg-white text-sm p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[40px] max-h-40"

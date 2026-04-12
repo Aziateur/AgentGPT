@@ -416,6 +416,7 @@ export interface NotificationItem {
   linkUrl?: string | null;
   read: boolean;
   archived: boolean;
+  bookmarked?: boolean;
   snoozedUntil?: string | null;
   createdAt: string;
 }
