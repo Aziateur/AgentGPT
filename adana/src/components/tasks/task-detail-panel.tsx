@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   X,
   User,
@@ -23,8 +23,17 @@ import {
   ChevronRight,
   Plus,
   Send,
+  Paperclip,
+  Download,
+  Play,
+  Square,
+  Clock,
+  Repeat,
+  Lock,
 } from "lucide-react";
 import { SubtaskList } from "./subtask-list";
+import { useAppStore } from "@/store/app-store";
+import { supabase } from "@/lib/supabase";
 import type { Task, Comment as CommentType } from "@/types";
 
 // -- Helpers ------------------------------------------------------------------
@@ -88,6 +97,69 @@ export function TaskDetailPanel({
   const [following, setFollowing] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+
+  // -- Extended sections state --
+  const [tagInput, setTagInput] = useState("");
+  const [showTagSuggestions, setShowTagSuggestions] = useState(false);
+  const [showAddCustomField, setShowAddCustomField] = useState(false);
+  const [newFieldName, setNewFieldName] = useState("");
+  const [newFieldType, setNewFieldType] = useState<
+    "text" | "number" | "date" | "checkbox" | "single_select" | "multi_select" | "people"
+  >("text");
+  const [uploading, setUploading] = useState(false);
+  const [manualMinutes, setManualMinutes] = useState<number | "">("");
+  const [addBlockerTaskId, setAddBlockerTaskId] = useState("");
+  const [addBlockedTaskId, setAddBlockedTaskId] = useState("");
+  const [addProjectId, setAddProjectId] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // -- Store selectors (pull only what we need) --
+  const allTags = useAppStore((s) => s.tags);
+  const allTasks = useAppStore((s) => s.tasks);
+  const allProjects = useAppStore((s) => s.projects);
+  const allUsers = useAppStore((s) => s.users);
+  const taskTagsState = useAppStore((s) => s.taskTags);
+  const taskDepsState = useAppStore((s) => s.taskDeps);
+  const taskProjectsState = useAppStore((s) => s.taskProjects);
+  const customFieldDefs = useAppStore((s) => s.customFieldDefs);
+  const customFieldValuesState = useAppStore((s) => s.customFieldValues);
+  const attachmentsState = useAppStore((s) => s.attachments);
+  const timeEntriesState = useAppStore((s) => (s as any).timeEntries) as
+    | import("@/types").TimeEntry[]
+    | undefined;
+
+  // -- Store actions --
+  const createTag = useAppStore((s) => s.createTag);
+  const addTagToTask = useAppStore((s) => s.addTagToTask);
+  const removeTagFromTask = useAppStore((s) => s.removeTagFromTask);
+  const getTaskTags = useAppStore((s) => s.getTaskTags);
+
+  const getProjectCustomFields = useAppStore((s) => s.getProjectCustomFields);
+  const setCustomFieldValue = useAppStore((s) => s.setCustomFieldValue);
+  const getCustomFieldValues = useAppStore((s) => s.getCustomFieldValues);
+  const createCustomFieldDef = useAppStore((s) => s.createCustomFieldDef);
+
+  const addAttachmentStore = useAppStore((s) => s.addAttachment);
+  const deleteAttachment = useAppStore((s) => s.deleteAttachment);
+  const getTaskAttachments = useAppStore((s) => s.getTaskAttachments);
+
+  const addDependency = useAppStore((s) => s.addDependency);
+  const removeDependency = useAppStore((s) => s.removeDependency);
+  const getBlockers = useAppStore((s) => s.getBlockers);
+  const getBlocked = useAppStore((s) => s.getBlocked);
+  const isTaskBlocked = useAppStore((s) => s.isTaskBlocked);
+
+  const startTimer = useAppStore((s) => s.startTimer);
+  const stopTimer = useAppStore((s) => s.stopTimer);
+  const addTimeEntry = useAppStore((s) => s.addTimeEntry);
+  const getTaskTimeEntries = useAppStore((s) => s.getTaskTimeEntries);
+  const getTaskActualMinutes = useAppStore((s) => s.getTaskActualMinutes);
+
+  const addTaskToProject = useAppStore((s) => s.addTaskToProject);
+  const removeTaskFromProject = useAppStore((s) => s.removeTaskFromProject);
+  const getTaskProjects = useAppStore((s) => s.getTaskProjects);
+
+  const updateTaskStore = useAppStore((s) => s.updateTask);
 
   // Derive data from task prop
   const subtasks: Task[] = (task.subtasks as Task[]) || [];
@@ -166,6 +238,243 @@ export function TaskDetailPanel({
 
   async function handleReject() {
     await onSetApprovalStatus?.(task.id, "rejected");
+  }
+
+  // -- Derived data for new sections (recomputes when store state changes) --
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _deps = [taskTagsState, taskDepsState, taskProjectsState, customFieldValuesState, attachmentsState, timeEntriesState, allTags];
+
+  const currentTaskTags = useMemo(() => getTaskTags(task.id), [getTaskTags, task.id, taskTagsState]);
+  const currentTaskTagIds = useMemo(() => new Set(currentTaskTags.map((t) => t.id)), [currentTaskTags]);
+  const tagSuggestions = useMemo(() => {
+    const q = tagInput.trim().toLowerCase();
+    if (!q) return [];
+    return allTags
+      .filter((t) => t.name.toLowerCase().includes(q) && !currentTaskTagIds.has(t.id))
+      .slice(0, 8);
+  }, [allTags, tagInput, currentTaskTagIds]);
+
+  const projectCustomFields = useMemo(
+    () => (task.projectId ? getProjectCustomFields(task.projectId) : []),
+    [getProjectCustomFields, task.projectId, customFieldDefs]
+  );
+  const taskCustomValues = useMemo(
+    () => getCustomFieldValues(task.id),
+    [getCustomFieldValues, task.id, customFieldValuesState]
+  );
+  const customValueByField = useMemo(() => {
+    const m = new Map<string, import("@/types").CustomFieldValueExt>();
+    for (const v of taskCustomValues) m.set(v.fieldId, v);
+    return m;
+  }, [taskCustomValues]);
+
+  const taskAttachments = useMemo(
+    () => getTaskAttachments(task.id),
+    [getTaskAttachments, task.id, attachmentsState]
+  );
+
+  const blockers = useMemo(() => getBlockers(task.id), [getBlockers, task.id, taskDepsState]);
+  const blockedTasks = useMemo(() => getBlocked(task.id), [getBlocked, task.id, taskDepsState]);
+  const taskIsBlocked = useMemo(() => isTaskBlocked(task.id), [isTaskBlocked, task.id, taskDepsState]);
+
+  const timeEntries = useMemo(
+    () => getTaskTimeEntries(task.id),
+    [getTaskTimeEntries, task.id, timeEntriesState]
+  );
+  const actualMinutes = useMemo(
+    () => getTaskActualMinutes(task.id),
+    [getTaskActualMinutes, task.id, timeEntriesState]
+  );
+  const openTimerEntry = useMemo(
+    () => timeEntries.find((e) => !e.endedAt) || null,
+    [timeEntries]
+  );
+
+  const taskProjectIds = useMemo(
+    () => getTaskProjects(task.id),
+    [getTaskProjects, task.id, taskProjectsState]
+  );
+  const multiHomedProjects = useMemo(() => {
+    const ids = new Set<string>(taskProjectIds);
+    if (task.projectId) ids.add(task.projectId);
+    return Array.from(ids)
+      .map((id) => allProjects.find((p) => p.id === id))
+      .filter(Boolean) as Array<{ id: string; name: string; color?: string }>;
+  }, [taskProjectIds, task.projectId, allProjects]);
+
+  const projectTasksForDeps = useMemo(() => {
+    if (!task.projectId) return allTasks.filter((t) => t.id !== task.id);
+    const blockerIds = new Set(blockers.map((b) => b.id));
+    const blockedIds = new Set(blockedTasks.map((b) => b.id));
+    return allTasks.filter(
+      (t) =>
+        t.id !== task.id &&
+        t.projectId === task.projectId &&
+        !blockerIds.has(t.id) &&
+        !blockedIds.has(t.id)
+    );
+  }, [allTasks, task.id, task.projectId, blockers, blockedTasks]);
+
+  const recurrence = ((task as any).recurrence || null) as
+    | { freq?: string; interval?: number }
+    | null;
+  const recurrenceFreq = recurrence?.freq ?? "none";
+  const recurrenceInterval = recurrence?.interval ?? 1;
+
+  // -- Handlers --
+
+  async function handleAddTagByName(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const existing = allTags.find((t) => t.name.toLowerCase() === trimmed.toLowerCase());
+    if (existing) {
+      if (!currentTaskTagIds.has(existing.id)) {
+        await addTagToTask(task.id, existing.id);
+      }
+    } else {
+      const created = await createTag(trimmed);
+      await addTagToTask(task.id, created.id);
+    }
+    setTagInput("");
+    setShowTagSuggestions(false);
+  }
+
+  async function handleRemoveTag(tagId: string) {
+    await removeTagFromTask(task.id, tagId);
+  }
+
+  async function handleAddExistingTag(tagId: string) {
+    await addTagToTask(task.id, tagId);
+    setTagInput("");
+    setShowTagSuggestions(false);
+  }
+
+  async function handleCustomFieldChange(
+    def: import("@/types").CustomFieldDefExt,
+    patch: Partial<import("@/types").CustomFieldValueExt>
+  ) {
+    await setCustomFieldValue(task.id, def.id, patch);
+  }
+
+  async function handleCreateCustomField() {
+    if (!newFieldName.trim() || !task.projectId) return;
+    await createCustomFieldDef({
+      projectId: task.projectId,
+      name: newFieldName.trim(),
+      fieldType: newFieldType,
+      position: projectCustomFields.length,
+    });
+    setNewFieldName("");
+    setNewFieldType("text");
+    setShowAddCustomField(false);
+  }
+
+  async function handleFileUpload(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        const path = `${task.id}/${Date.now()}-${file.name}`;
+        const { error } = await supabase.storage
+          .from("attachments")
+          .upload(path, file, { cacheControl: "3600", upsert: false });
+        if (error) {
+          console.error("Upload failed", error);
+          continue;
+        }
+        await addAttachmentStore({
+          taskId: task.id,
+          filename: file.name,
+          storagePath: path,
+          mimeType: file.type || null,
+          sizeBytes: file.size,
+        });
+      }
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function handleDeleteAttachment(id: string) {
+    await deleteAttachment(id);
+  }
+
+  async function handleAddBlocker() {
+    if (!addBlockerTaskId) return;
+    await addDependency(addBlockerTaskId, task.id);
+    setAddBlockerTaskId("");
+  }
+
+  async function handleAddBlocked() {
+    if (!addBlockedTaskId) return;
+    await addDependency(task.id, addBlockedTaskId);
+    setAddBlockedTaskId("");
+  }
+
+  async function handleRemoveBlocker(blockerId: string) {
+    const edge = taskDepsState.find(
+      (d) => d.blockerTaskId === blockerId && d.blockedTaskId === task.id
+    );
+    if (edge) await removeDependency(edge.id);
+  }
+
+  async function handleRemoveBlocked(blockedId: string) {
+    const edge = taskDepsState.find(
+      (d) => d.blockerTaskId === task.id && d.blockedTaskId === blockedId
+    );
+    if (edge) await removeDependency(edge.id);
+  }
+
+  async function handleToggleTimer() {
+    if (openTimerEntry) {
+      await stopTimer(openTimerEntry.id);
+    } else {
+      await startTimer(task.id);
+    }
+  }
+
+  async function handleAddManualTime() {
+    if (!manualMinutes || manualMinutes <= 0) return;
+    await addTimeEntry(task.id, Number(manualMinutes));
+    setManualMinutes("");
+  }
+
+  async function handleRecurrenceChange(
+    freq: string,
+    interval: number = recurrenceInterval || 1
+  ) {
+    if (freq === "none") {
+      await updateTaskStore(task.id, { recurrence: null } as any);
+    } else {
+      await updateTaskStore(task.id, { recurrence: { freq, interval } } as any);
+    }
+  }
+
+  async function handleAddToProject() {
+    if (!addProjectId) return;
+    await addTaskToProject(task.id, addProjectId);
+    setAddProjectId("");
+  }
+
+  async function handleRemoveFromProject(projectId: string) {
+    if (projectId === task.projectId) return;
+    await removeTaskFromProject(task.id, projectId);
+  }
+
+  function formatBytes(bytes?: number | null) {
+    if (!bytes || bytes <= 0) return "";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB"];
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
+    return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+  }
+
+  function formatMinutes(mins: number) {
+    if (mins < 60) return `${mins}m`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
   }
 
   return (
@@ -261,6 +570,14 @@ export function TaskDetailPanel({
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-auto">
+        {/* Blocked banner */}
+        {taskIsBlocked && (
+          <div className="flex items-center gap-2 border-b border-red-200 bg-red-50 px-4 py-2 text-xs font-medium text-red-700">
+            <Lock className="h-3.5 w-3.5" />
+            Blocked — waiting on {blockers.filter((b) => !b.completed).length} incomplete task
+            {blockers.filter((b) => !b.completed).length === 1 ? "" : "s"}
+          </div>
+        )}
         <div className="p-5">
           {/* Title */}
           {isEditingTitle ? (
