@@ -36,6 +36,7 @@ function ViewNav({ projectId, active }: { projectId: string; active: string }) {
     { key: "board", label: "Board" },
     { key: "timeline", label: "Timeline" },
     { key: "calendar", label: "Calendar" },
+    { key: "workload", label: "Workload" },
     { key: "note", label: "Note" },
     { key: "files", label: "Files" },
     { key: "dashboard", label: "Dashboard" },

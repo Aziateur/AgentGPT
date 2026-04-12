@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, X, Settings, GripVertical } from "lucide-react";
 import { useAppStore } from "@/store/app-store";
 import type { Task, Project } from "@/types";
@@ -85,7 +85,7 @@ function loadWidgets(): HomeWidget[] {
           if (bucket && bucket.length > 0) ordered.push(bucket.shift()!);
         }
         // Append any remaining widgets not mentioned in order
-        for (const arr of byType.values()) ordered.push(...arr);
+        byType.forEach((arr) => ordered.push(...arr));
         if (ordered.length === widgets.length) widgets = ordered;
       }
     }
@@ -122,7 +122,43 @@ export default function HomePage() {
     try {
       localStorage.setItem("adana:home-widgets", JSON.stringify(widgets));
     } catch {}
+    saveOrder(widgets);
   }, [widgets, hydrated]);
+
+  // Drag-reorder state
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const handleDragStart = (index: number) => (e: React.DragEvent) => {
+    setDragIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+    try {
+      e.dataTransfer.setData("text/plain", String(index));
+    } catch {}
+  };
+  const handleDragOver = (index: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverIndex !== index) setDragOverIndex(index);
+  };
+  const handleDragLeave = () => setDragOverIndex(null);
+  const handleDrop = (index: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    const from = dragIndex;
+    setDragIndex(null);
+    setDragOverIndex(null);
+    if (from == null || from === index) return;
+    setWidgets((ws) => {
+      const next = [...ws];
+      const [moved] = next.splice(from, 1);
+      next.splice(index, 0, moved);
+      return next;
+    });
+  };
+  const handleDragEnd = () => {
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
 
   const removeWidget = (id: string) => setWidgets((ws) => ws.filter((w) => w.id !== id));
   const addWidget = (type: WidgetType) => {
@@ -207,10 +243,23 @@ export default function HomePage() {
       </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        {widgets.map((w) => (
-          <WidgetShell key={w.id} widget={w} editing={customizing} onRemove={() => removeWidget(w.id)}>
-            <WidgetBody widget={w} tasks={tasks as Task[]} projects={projects as Project[]} goals={goalsExt as any[]} currentUserId={currentUser?.id ?? null} />
-          </WidgetShell>
+        {widgets.map((w, i) => (
+          <div
+            key={w.id}
+            draggable
+            onDragStart={handleDragStart(i)}
+            onDragOver={handleDragOver(i)}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop(i)}
+            onDragEnd={handleDragEnd}
+            className={`transition-all ${
+              dragIndex === i ? "opacity-40" : ""
+            } ${dragOverIndex === i && dragIndex !== i ? "ring-2 ring-indigo-400 ring-offset-2 rounded-xl" : ""}`}
+          >
+            <WidgetShell widget={w} editing={customizing} onRemove={() => removeWidget(w.id)}>
+              <WidgetBody widget={w} tasks={tasks as Task[]} projects={projects as Project[]} goals={goalsExt as any[]} currentUserId={currentUser?.id ?? null} />
+            </WidgetShell>
+          </div>
         ))}
         {customizing && (
           <button
@@ -268,7 +317,10 @@ function WidgetShell({
   return (
     <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
       <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
-        <h2 className="text-sm font-semibold text-gray-900">{widget.title}</h2>
+        <div className="flex items-center gap-1.5">
+          <GripVertical className="h-4 w-4 cursor-grab text-gray-300 active:cursor-grabbing" />
+          <h2 className="text-sm font-semibold text-gray-900">{widget.title}</h2>
+        </div>
         {editing && (
           <button
             onClick={onRemove}

@@ -3,12 +3,20 @@ export interface ProjectTemplateTask {
   title: string;
 }
 
+export type ProjectTemplateCategory =
+  | "Marketing"
+  | "Operations & PMO"
+  | "Productivity"
+  | "Engineering";
+
 export interface ProjectTemplate {
   id: string;
   name: string;
   description: string;
   icon: string;
   color: string;
+  category: ProjectTemplateCategory;
+  emoji: string;
   sections: string[];
   tasks: ProjectTemplateTask[];
 }

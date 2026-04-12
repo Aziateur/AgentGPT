@@ -28,11 +28,13 @@ import {
 } from "lucide-react";
 import { useAppStore } from "@/stores/app-store";
 import { useAppStore as useDataStore } from "@/store/app-store";
-import { cn } from "@/lib/utils";
+import { cn, isUserOOO } from "@/lib/utils";
 import type { ProjectView } from "@/types";
 import { SmartChat } from "@/components/ai/smart-chat";
 import { getDefaultProvider } from "@/lib/ai/settings";
 import { GlobalSearchOverlay } from "@/components/search/global-search-overlay";
+import { WorkspaceSwitcher } from "@/components/layout/workspace-switcher";
+import { InviteModal } from "@/components/invite-modal";
 
 // ---------------------------------------------------------------------------
 // View switcher configuration
@@ -111,6 +113,7 @@ export function Header() {
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const createBtnRef = useRef<HTMLButtonElement | null>(null);
 

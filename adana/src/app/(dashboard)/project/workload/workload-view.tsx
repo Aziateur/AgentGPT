@@ -1,12 +1,9 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { CalendarView } from "@/components/calendar/calendar-view";
-
-// ---------------------------------------------------------------------------
-// View Nav
-// ---------------------------------------------------------------------------
+import { useSearchParams } from "next/navigation";
+import { useAppStore } from "@/store/app-store";
+import { WorkloadView } from "@/components/workload/workload-view";
 
 function ViewNav({ projectId, active }: { projectId: string; active: string }) {
   const views = [
@@ -40,20 +37,24 @@ function ViewNav({ projectId, active }: { projectId: string; active: string }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
-export default function CalendarViewClient() {
+export default function WorkloadViewClient() {
   const searchParams = useSearchParams();
-  const projectId = (searchParams?.get("id") as string) ?? "";
+  const id = (searchParams?.get("id") as string) || "";
+  const { projects } = useAppStore();
+  const project = projects.find((p) => p.id === id);
 
   return (
-    <div className="flex h-full flex-col">
-      <ViewNav projectId={projectId} active="calendar" />
-      <div className="flex-1 overflow-hidden">
-        <CalendarView projectId={projectId} />
+    <>
+      <ViewNav projectId={id} active="workload" />
+      <div className="p-6">
+        {!project ? (
+          <div className="rounded-xl border border-gray-200 bg-white p-12 text-center text-sm text-gray-500">
+            Project not found.
+          </div>
+        ) : (
+          <WorkloadView projectId={id} />
+        )}
       </div>
-    </div>
+    </>
   );
 }

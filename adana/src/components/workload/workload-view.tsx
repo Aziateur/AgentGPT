@@ -9,6 +9,8 @@ import type { Task, User } from "@/types";
 
 export interface WorkloadViewProps {
   className?: string;
+  /** If set, only include tasks in this project when computing per-user weekly loads. */
+  projectId?: string;
 }
 
 // -- Helpers ------------------------------------------------------------------
@@ -74,9 +76,16 @@ function getInitials(name: string): string {
 
 // -- Component ----------------------------------------------------------------
 
-export function WorkloadView({ className }: WorkloadViewProps) {
+export function WorkloadView({ className, projectId }: WorkloadViewProps) {
   const users = useAppStore((s) => s.users);
-  const tasks = useAppStore((s) => s.tasks);
+  const allTasks = useAppStore((s) => s.tasks);
+  const tasks = useMemo(
+    () =>
+      projectId
+        ? allTasks.filter((t) => t.projectId === projectId)
+        : allTasks,
+    [allTasks, projectId],
+  );
 
   const weeks = useMemo(() => {
     const now = new Date();

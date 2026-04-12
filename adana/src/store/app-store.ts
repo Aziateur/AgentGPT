@@ -17,6 +17,7 @@ import {
   createMultiHomingSlice,
   createRecurrenceSlice,
 } from "./slices/views-misc";
+import { createTaskTypesSlice } from "./slices/task-types";
 import type {
   User,
   Project,
@@ -155,6 +156,10 @@ function dbToUser(r: Record<string, unknown>): User {
     name: r.name as string,
     email: r.email as string,
     avatar: (r.avatar as string) ?? null,
+    oooEnabled: (r.ooo_enabled as boolean) ?? false,
+    oooFrom: (r.ooo_from as string) ?? null,
+    oooUntil: (r.ooo_until as string) ?? null,
+    oooMessage: (r.ooo_message as string) ?? null,
   };
 }
 
@@ -600,6 +605,7 @@ interface AppState {
 
   // -- Project Members --
   addProjectMember: (projectId: string, userId: string, role?: string) => Promise<void>;
+  updateProjectMember: (projectId: string, userId: string, role: string) => Promise<void>;
   removeProjectMember: (projectId: string, userId: string) => Promise<void>;
 
   // -- Project Status Updates --
@@ -632,6 +638,15 @@ interface AppState {
 
   // -- Recurring tasks helper (called on complete) --
   spawnRecurrence: (taskId: string) => Promise<Task | null>;
+
+  // -- Task types (per-project custom types) --
+  taskTypes: import("@/types").TaskTypeDef[];
+  fetchTaskTypes: () => Promise<void>;
+  createTaskType: (
+    data: Partial<import("@/types").TaskTypeDef> & { name: string; projectId?: string | null }
+  ) => Promise<import("@/types").TaskTypeDef>;
+  deleteTaskType: (id: string) => Promise<void>;
+  getProjectTaskTypes: (projectId: string) => import("@/types").TaskTypeDef[];
 }
 
 // ---------------------------------------------------------------------------
@@ -676,6 +691,7 @@ export const useAppStore = create<AppState>()(
       dashboards: [],
       dashboardWidgets: [],
       myTaskSections: [],
+      taskTypes: [],
 
       initialized: false,
       loading: false,
@@ -736,6 +752,7 @@ export const useAppStore = create<AppState>()(
         psuD, timeD,
         savedViewsD, savedSearchD,
         dashD, widgetD, myTaskSecD,
+        taskTypesD,
       ] = await Promise.all([
         safe(async () => ((await supabase.from("tags").select("*")).data || [])),
         safe(async () => ((await supabase.from("task_tags").select("*")).data || [])),
@@ -763,6 +780,7 @@ export const useAppStore = create<AppState>()(
         safe(async () => ((await supabase.from("dashboards").select("*")).data || [])),
         safe(async () => ((await supabase.from("dashboard_widgets").select("*")).data || [])),
         safe(async () => ((await supabase.from("my_task_sections").select("*").order("position")).data || [])),
+        safe(async () => ((await supabase.from("task_types").select("*")).data || [])),
       ]);
 
       set({
@@ -798,6 +816,14 @@ export const useAppStore = create<AppState>()(
         dashboards: dashD.map(dbToDashboard),
         dashboardWidgets: widgetD.map(dbToWidget),
         myTaskSections: myTaskSecD.map((r: any) => ({ id: r.id, userId: r.user_id, name: r.name, position: r.position ?? 0, createdAt: r.created_at })),
+        taskTypes: taskTypesD.map((r: any) => ({
+          id: r.id,
+          projectId: r.project_id ?? null,
+          name: r.name,
+          color: r.color ?? "#4c6ef5",
+          icon: r.icon ?? null,
+          createdAt: r.created_at,
+        })),
         initialized: true,
         loading: false,
         error: null,
@@ -1226,6 +1252,7 @@ export const useAppStore = create<AppState>()(
   ...(createDashboardsSlice(set, get) as unknown as Partial<AppState>),
   ...(createMultiHomingSlice(set, get) as unknown as Partial<AppState>),
   ...(createRecurrenceSlice(set, get) as unknown as Partial<AppState>),
+  ...(createTaskTypesSlice(set, get) as unknown as Partial<AppState>),
 } as AppState),
 {
   name: "adana-app-storage",

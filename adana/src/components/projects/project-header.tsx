@@ -22,6 +22,7 @@ import {
   BarChart3,
   Bookmark,
   Plus,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CustomizePanel } from "./customize-panel";
@@ -43,7 +44,7 @@ import type { Project, ProjectView, ProjectStatusType, User, SavedView } from "@
 // Types
 // ---------------------------------------------------------------------------
 
-type ExtendedView = ProjectView | "overview" | "note" | "files" | "dashboard";
+type ExtendedView = ProjectView | "overview" | "note" | "files" | "dashboard" | "workload";
 
 interface ViewTab {
   id: ExtendedView;
@@ -57,6 +58,7 @@ const VIEW_TABS: ViewTab[] = [
   { id: "board", label: "Board", icon: LayoutGrid },
   { id: "timeline", label: "Timeline", icon: GanttChart },
   { id: "calendar", label: "Calendar", icon: CalendarDays },
+  { id: "workload", label: "Workload", icon: Users },
   { id: "note", label: "Note", icon: StickyNote },
   { id: "files", label: "Files", icon: Paperclip },
   { id: "dashboard", label: "Dashboard", icon: BarChart3 },

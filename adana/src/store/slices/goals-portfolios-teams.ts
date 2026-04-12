@@ -452,6 +452,30 @@ export function createTeamsSlice(set: SetFn, get: GetFn) {
       }
     },
 
+    updateProjectMember: async (
+      projectId: string,
+      userId: string,
+      role: string
+    ) => {
+      const prev = (get().projectMembers as ProjectMemberExt[]) ?? [];
+      set({
+        projectMembers: prev.map((m) =>
+          m.projectId === projectId && m.userId === userId
+            ? { ...m, role }
+            : m
+        ),
+      });
+      try {
+        await supabase
+          .from("project_members")
+          .update({ role })
+          .eq("project_id", projectId)
+          .eq("user_id", userId);
+      } catch (err) {
+        console.error("updateProjectMember failed", err);
+      }
+    },
+
     removeProjectMember: async (projectId: string, userId: string) => {
       const prev = (get().projectMembers as ProjectMemberExt[]) ?? [];
       set({

@@ -78,7 +78,7 @@ function loadBookmarks(): Set<string> {
 function saveBookmarks(set: Set<string>) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(BOOKMARKS_KEY, JSON.stringify([...set]));
+    window.localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(Array.from(set)));
   } catch {
     // ignore
   }

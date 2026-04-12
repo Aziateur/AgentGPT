@@ -119,3 +119,26 @@ export function truncate(str: string, maxLength: number): string {
   if (str.length <= maxLength) return str;
   return str.slice(0, maxLength - 1).trimEnd() + "\u2026";
 }
+
+/**
+ * Returns true if the given user is currently out-of-office.
+ * Honors `ooo_enabled` (falsy = never OOO), and a from/until window if set.
+ */
+export function isUserOOO(user: unknown): boolean {
+  if (!user || typeof user !== "object") return false;
+  const u = user as Record<string, unknown>;
+  const enabled = (u.oooEnabled ?? u.ooo_enabled) as boolean | undefined;
+  if (!enabled) return false;
+  const now = Date.now();
+  const fromRaw = (u.oooFrom ?? u.ooo_from) as string | null | undefined;
+  const untilRaw = (u.oooUntil ?? u.ooo_until) as string | null | undefined;
+  if (fromRaw) {
+    const f = new Date(fromRaw).getTime();
+    if (Number.isFinite(f) && now < f) return false;
+  }
+  if (untilRaw) {
+    const t = new Date(untilRaw).getTime();
+    if (Number.isFinite(t) && now > t) return false;
+  }
+  return true;
+}

@@ -27,7 +27,20 @@ export interface User {
   name: string;
   email: string;
   avatar?: string | null;
+  oooEnabled?: boolean | null;
+  oooFrom?: string | null;
+  oooUntil?: string | null;
+  oooMessage?: string | null;
   [key: string]: unknown;
+}
+
+export interface TaskTypeDef {
+  id: string;
+  projectId: string | null;
+  name: string;
+  color: string;
+  icon?: string | null;
+  createdAt: string;
 }
 
 export interface Team {
