@@ -869,7 +869,23 @@ export const useAppStore = create<AppState>()(
     }
   },
 
+  // Soft-delete: mark project as trashed. Tasks/sections keep their project link.
   deleteProject: async (id) => {
+    const now = new Date().toISOString();
+    set((s) => ({
+      projects: s.projects.map((p) =>
+        p.id === id ? { ...p, deletedAt: now } : p
+      ),
+    }));
+    try {
+      await supabase.from("projects").update({ deleted_at: now }).eq("id", id);
+    } catch (err) {
+      console.error("Failed to soft-delete project in Supabase:", err);
+    }
+  },
+
+  // Permanent delete: remove the project + its tasks/sections.
+  deleteProjectHard: async (id) => {
     set((s) => ({
       projects: s.projects.filter((p) => p.id !== id),
       tasks: s.tasks.filter((t) => t.projectId !== id),
@@ -880,8 +896,32 @@ export const useAppStore = create<AppState>()(
       await supabase.from("sections").delete().eq("project_id", id);
       await supabase.from("projects").delete().eq("id", id);
     } catch (err) {
-      console.error("Failed to delete project in Supabase:", err);
+      console.error("Failed to hard-delete project in Supabase:", err);
     }
+  },
+
+  restoreProject: async (id) => {
+    set((s) => ({
+      projects: s.projects.map((p) =>
+        p.id === id ? { ...p, deletedAt: null } : p
+      ),
+    }));
+    try {
+      await supabase.from("projects").update({ deleted_at: null }).eq("id", id);
+    } catch (err) {
+      console.error("Failed to restore project in Supabase:", err);
+    }
+  },
+
+  emptyTrashProjects: async () => {
+    const trashed = get().projects.filter((p) => !!(p as any).deletedAt);
+    for (const p of trashed) {
+      await get().deleteProjectHard(p.id);
+    }
+  },
+
+  getTrashedProjects: (): Project[] => {
+    return get().projects.filter((p) => !!(p as any).deletedAt);
   },
 
   toggleFavorite: async (id) => {
@@ -945,13 +985,53 @@ export const useAppStore = create<AppState>()(
     }
   },
 
+  // Soft-delete: mark task as trashed.
   deleteTask: async (id) => {
+    const now = new Date().toISOString();
+    set((s) => ({
+      tasks: s.tasks.map((t) =>
+        t.id === id ? { ...t, deletedAt: now } : t
+      ),
+    }));
+    try {
+      await supabase.from("tasks").update({ deleted_at: now }).eq("id", id);
+    } catch (err) {
+      console.error("Failed to soft-delete task in Supabase:", err);
+    }
+  },
+
+  // Permanent delete: remove the task row.
+  deleteTaskHard: async (id) => {
     set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }));
     try {
       await supabase.from("tasks").delete().eq("id", id);
     } catch (err) {
-      console.error("Failed to delete task in Supabase:", err);
+      console.error("Failed to hard-delete task in Supabase:", err);
     }
+  },
+
+  restoreTask: async (id) => {
+    set((s) => ({
+      tasks: s.tasks.map((t) =>
+        t.id === id ? { ...t, deletedAt: null } : t
+      ),
+    }));
+    try {
+      await supabase.from("tasks").update({ deleted_at: null }).eq("id", id);
+    } catch (err) {
+      console.error("Failed to restore task in Supabase:", err);
+    }
+  },
+
+  emptyTrash: async () => {
+    const trashed = get().tasks.filter((t) => !!(t as any).deletedAt);
+    for (const t of trashed) {
+      await get().deleteTaskHard(t.id);
+    }
+  },
+
+  getTrashedTasks: (): Task[] => {
+    return get().tasks.filter((t) => !!(t as any).deletedAt);
   },
 
   toggleTaskComplete: async (id) => {
