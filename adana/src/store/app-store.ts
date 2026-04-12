@@ -6,6 +6,17 @@ import {
   mockSections,
   mockTasks,
 } from "@/lib/mock-data";
+import { createTagsSlice, createCustomFieldsSlice } from "./slices/tags-fields";
+import { createDepsSlice, createAttachmentsSlice } from "./slices/deps-attachments";
+import { createRulesSlice, createTimeSlice } from "./slices/rules-time";
+import { createFormsSlice, createNotificationsSlice } from "./slices/forms-notifications";
+import { createGoalsSlice, createPortfoliosSlice, createTeamsSlice } from "./slices/goals-portfolios-teams";
+import {
+  createSavedViewsSlice,
+  createDashboardsSlice,
+  createMultiHomingSlice,
+  createRecurrenceSlice,
+} from "./slices/views-misc";
 import type {
   User,
   Project,
@@ -1036,7 +1047,24 @@ export const useAppStore = create<AppState>()(
 
   setLocalGoals: (goals) => set({ localGoals: goals }),
   setLocalPortfolios: (portfolios) => set({ localPortfolios: portfolios }),
-}),
+
+  // -- Spread extended-schema slices --
+  ...(createTagsSlice(set, get) as unknown as Partial<AppState>),
+  ...(createCustomFieldsSlice(set, get) as unknown as Partial<AppState>),
+  ...(createDepsSlice(set, get) as unknown as Partial<AppState>),
+  ...(createAttachmentsSlice(set, get) as unknown as Partial<AppState>),
+  ...(createRulesSlice(set, get) as unknown as Partial<AppState>),
+  ...(createTimeSlice(set, get) as unknown as Partial<AppState>),
+  ...(createFormsSlice(set, get) as unknown as Partial<AppState>),
+  ...(createNotificationsSlice(set, get) as unknown as Partial<AppState>),
+  ...(createGoalsSlice(set, get) as unknown as Partial<AppState>),
+  ...(createPortfoliosSlice(set, get) as unknown as Partial<AppState>),
+  ...(createTeamsSlice(set, get) as unknown as Partial<AppState>),
+  ...(createSavedViewsSlice(set, get) as unknown as Partial<AppState>),
+  ...(createDashboardsSlice(set, get) as unknown as Partial<AppState>),
+  ...(createMultiHomingSlice(set, get) as unknown as Partial<AppState>),
+  ...(createRecurrenceSlice(set, get) as unknown as Partial<AppState>),
+} as AppState),
 {
   name: "adana-app-storage",
   partialize: (state) => ({
