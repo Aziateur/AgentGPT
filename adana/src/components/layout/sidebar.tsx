@@ -18,6 +18,8 @@ import {
   Sparkles,
   Star,
   ChevronDown,
+  Settings as SettingsIcon,
+  Trash2,
 } from "lucide-react";
 import { useAppStore } from "@/stores/app-store";
 import { useAppStore as useDataStore } from "@/store/app-store";
@@ -488,7 +490,21 @@ export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: Si
       </nav>
 
       {/* Bottom actions --------------------------------------------------- */}
-      <div className="border-t border-sidebar-hover px-1.5 py-2">
+      <div className="border-t border-sidebar-hover px-1.5 py-2 space-y-0.5">
+        <NavItem
+          href="/settings"
+          icon={<SettingsIcon className="h-4 w-4" />}
+          label="Settings"
+          collapsed={sidebarCollapsed}
+          active={pathname === "/settings" || (pathname.startsWith("/settings/") && !pathname.startsWith("/settings/ai"))}
+        />
+        <NavItem
+          href="/trash"
+          icon={<Trash2 className="h-4 w-4" />}
+          label="Trash"
+          collapsed={sidebarCollapsed}
+          active={pathname === "/trash"}
+        />
         <button
           onClick={() => {}}
           className={cn(

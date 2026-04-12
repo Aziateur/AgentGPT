@@ -483,13 +483,21 @@ interface AppState {
   // Project mutations
   createProject: (data: Partial<Project>) => Promise<Project>;
   updateProject: (id: string, updates: Partial<Project>) => Promise<void>;
-  deleteProject: (id: string) => Promise<void>;
+  deleteProject: (id: string) => Promise<void>;        // soft-delete
+  deleteProjectHard: (id: string) => Promise<void>;    // permanent delete
+  restoreProject: (id: string) => Promise<void>;
+  emptyTrashProjects: () => Promise<void>;
+  getTrashedProjects: () => Project[];
   toggleFavorite: (id: string) => Promise<void>;
 
   // Task mutations
   createTask: (data: Partial<Task>) => Promise<Task>;
   updateTask: (id: string, updates: Partial<Task>) => Promise<void>;
-  deleteTask: (id: string) => Promise<void>;
+  deleteTask: (id: string) => Promise<void>;           // soft-delete
+  deleteTaskHard: (id: string) => Promise<void>;       // permanent delete
+  restoreTask: (id: string) => Promise<void>;
+  emptyTrash: () => Promise<void>;
+  getTrashedTasks: () => Task[];
   toggleTaskComplete: (id: string) => Promise<void>;
 
   // Section mutations
