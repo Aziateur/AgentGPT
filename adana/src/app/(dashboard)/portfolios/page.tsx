@@ -35,40 +35,55 @@ type ProjectGroup = {
 // -- Component ----------------------------------------------------------------
 
 export default function PortfoliosPage() {
-  const { projects, tasks, loading, localPortfolios: rawLocalPortfolios, setLocalPortfolios } = useAppStore();
+  const store = useAppStore();
+  const { projects, tasks, loading } = store;
+  const getMyPortfolios = (store as any).getMyPortfolios as undefined | (() => any[]);
+  const portfoliosExt: any[] = getMyPortfolios ? getMyPortfolios() : ((store as any).portfoliosExt ?? []);
+  const portfolioProjects: any[] = (store as any).portfolioProjects ?? [];
+  const createPortfolio = (store as any).createPortfolio as (d: any) => Promise<any>;
+  const deletePortfolio = (store as any).deletePortfolio as (id: string) => Promise<void>;
+  const addProjectToPortfolio = (store as any).addProjectToPortfolio as (pid: string, projId: string) => Promise<void>;
+  const removeProjectFromPortfolio = (store as any).removeProjectFromPortfolio as (pid: string, projId: string) => Promise<void>;
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newColor, setNewColor] = useState(PALETTE[0]);
-  
-  const localPortfolios: ProjectGroup[] = rawLocalPortfolios || [];
+  const [addingToPortfolio, setAddingToPortfolio] = useState<string | null>(null);
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!newName.trim()) return;
-    // Create a portfolio that groups all current projects
-    const newPortfolio: ProjectGroup = {
-      id: `portfolio-${Date.now()}`,
-      name: newName.trim(),
-      description: newDescription.trim(),
-      color: newColor,
-      projects: projects.map((p) => {
-        const projectTasks = tasks.filter((t: Task) => t.projectId === p.id);
-        const completedCount = projectTasks.filter((t: Task) => t.completed).length;
-        return {
-          id: p.id,
-          name: p.name,
-          color: p.color,
-          taskCount: projectTasks.length,
-          completedCount,
-          status: "on_track",
-        };
-      }),
-    };
-    setLocalPortfolios([newPortfolio, ...localPortfolios]);
+    try {
+      const p = await createPortfolio({
+        name: newName.trim(),
+        description: newDescription.trim() || null,
+        color: newColor,
+      });
+      // Auto-link all current projects
+      for (const proj of projects) {
+        try { await addProjectToPortfolio(p.id, proj.id); } catch {}
+      }
+    } catch (err) {
+      console.error("Failed to create portfolio", err);
+    }
     setNewName("");
     setNewDescription("");
     setNewColor(PALETTE[0]);
     setShowCreateModal(false);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this portfolio?")) return;
+    try { await deletePortfolio(id); } catch (err) { console.error(err); }
+  };
+
+  const handleAddProject = async (portfolioId: string, projectId: string) => {
+    try { await addProjectToPortfolio(portfolioId, projectId); } catch (err) { console.error(err); }
+    setAddingToPortfolio(null);
+  };
+
+  const handleRemoveProject = async (portfolioId: string, projectId: string) => {
+    try { await removeProjectFromPortfolio(portfolioId, projectId); } catch (err) { console.error(err); }
   };
 
   if (loading) {
@@ -97,13 +112,38 @@ export default function PortfoliosPage() {
   });
 
   const displayPortfolios: ProjectGroup[] =
-    localPortfolios.length > 0
-      ? localPortfolios
+    portfoliosExt.length > 0
+      ? portfoliosExt.map((pf: any): ProjectGroup => {
+          const linkIds = portfolioProjects
+            .filter((pp: any) => pp.portfolioId === pf.id)
+            .map((pp: any) => pp.projectId);
+          const linkedProjects = projects
+            .filter((p) => linkIds.includes(p.id))
+            .map((p) => {
+              const pt = tasks.filter((t: Task) => t.projectId === p.id);
+              const completed = pt.filter((t: Task) => t.completed).length;
+              return {
+                id: p.id,
+                name: p.name,
+                color: p.color,
+                taskCount: pt.length,
+                completedCount: completed,
+                status: (p as any).status ?? "on_track",
+              };
+            });
+          return {
+            id: pf.id,
+            name: pf.name,
+            description: pf.description ?? "",
+            color: pf.color,
+            projects: linkedProjects,
+          };
+        })
       : [
           {
             id: "default",
             name: "All Projects",
-            description: "Overview of all workspace projects",
+            description: "Overview of all workspace projects — create a portfolio to group projects",
             color: "#4f46e5",
             projects: allProjectStats.map((p) => ({
               ...p,
@@ -152,7 +192,43 @@ export default function PortfoliosPage() {
                   {portfolio.projects.length} project{portfolio.projects.length !== 1 ? "s" : ""}
                 </p>
               </div>
+              {portfolio.id !== "default" && (
+                <>
+                  <button
+                    onClick={() => setAddingToPortfolio(addingToPortfolio === portfolio.id ? null : portfolio.id)}
+                    className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                  >
+                    + Project
+                  </button>
+                  <button
+                    onClick={() => handleDelete(portfolio.id)}
+                    className="rounded-md px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                    title="Delete portfolio"
+                  >
+                    Delete
+                  </button>
+                </>
+              )}
             </div>
+
+            {addingToPortfolio === portfolio.id && portfolio.id !== "default" && (
+              <div className="flex flex-wrap gap-2 border-b border-gray-100 bg-gray-50 px-6 py-3">
+                {projects
+                  .filter((p) => !portfolio.projects.find((pp) => pp.id === p.id))
+                  .map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => handleAddProject(portfolio.id, p.id)}
+                      className="rounded-full border border-gray-200 bg-white px-2.5 py-0.5 text-xs hover:bg-indigo-50 hover:text-indigo-700"
+                    >
+                      + {p.name}
+                    </button>
+                  ))}
+                {projects.filter((p) => !portfolio.projects.find((pp) => pp.id === p.id)).length === 0 && (
+                  <span className="text-xs text-gray-400">No more projects to add.</span>
+                )}
+              </div>
+            )}
 
             {/* Projects within portfolio */}
             {portfolio.projects.length > 0 ? (
@@ -187,6 +263,15 @@ export default function PortfoliosPage() {
                         </span>
                       </div>
                       <span className="text-xs text-gray-500">{project.taskCount} tasks</span>
+                      {portfolio.id !== "default" && (
+                        <button
+                          onClick={() => handleRemoveProject(portfolio.id, project.id)}
+                          className="text-xs text-gray-400 hover:text-red-600"
+                          title="Remove from portfolio"
+                        >
+                          ×
+                        </button>
+                      )}
                     </div>
                   );
                 })}
