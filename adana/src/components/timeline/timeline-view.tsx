@@ -1,30 +1,9 @@
 "use client";
 
-import React, { useState, useMemo, useRef } from "react";
-import {
-  format,
-  addDays,
-  addWeeks,
-  addMonths,
-  startOfDay,
-  startOfWeek,
-  startOfMonth,
-  differenceInDays,
-  differenceInCalendarDays,
-  isToday,
-  isBefore,
-  isAfter,
-  eachDayOfInterval,
-  eachWeekOfInterval,
-  eachMonthOfInterval,
-} from "date-fns";
-import { ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from "lucide-react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Tooltip } from "@/components/ui/tooltip";
-import { Avatar } from "@/components/ui/avatar";
-import type { Task, Section, User, TaskPriority, Dependency } from "@/types";
+import { useAppStore } from "@/store/app-store";
+import type { Task } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -32,239 +11,379 @@ import type { Task, Section, User, TaskPriority, Dependency } from "@/types";
 
 type ZoomLevel = "day" | "week" | "month";
 
+const ZOOM_PX_PER_DAY: Record<ZoomLevel, number> = {
+  day: 50,
+  week: 24,
+  month: 8,
+};
+
 export interface TimelineViewProps {
-  sections?: Section[];
-  tasks?: Task[];
-  dependencies?: Dependency[];
-  users?: Record<string, User>;
+  projectId: string;
   onTaskClick?: (taskId: string) => void;
   className?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Mock data
-// ---------------------------------------------------------------------------
-
-const MOCK_USERS: Record<string, User> = {
-  u1: { id: "u1", name: "Alice Chen", email: "alice@example.com", avatar: null },
-  u2: { id: "u2", name: "Bob Park", email: "bob@example.com", avatar: null },
-  u3: { id: "u3", name: "Carol Smith", email: "carol@example.com", avatar: null },
-};
-
-function makeTask(overrides: Partial<Task> & { id: string; title: string; sectionId: string }): Task {
-  return {
-    description: null, htmlDescription: null, status: "not_started", priority: "none",
-    taskType: "task", completed: false, completedAt: null, assigneeId: null, projectId: "p1",
-    parentTaskId: null, position: 0, dueDate: null, startDate: null, estimatedMinutes: null,
-    actualMinutes: null, tagIds: [], followerIds: [], subtaskIds: [], dependencyIds: [],
-    approvalStatus: null, approverIds: [], likes: [], attachmentCount: 0, commentCount: 0,
-    customFieldValues: [], createdAt: "", updatedAt: "", creatorId: "u1", isTemplate: false,
-    ...overrides,
-  };
+interface DragState {
+  taskId: string;
+  startX: number;
+  originalStart: string;
+  originalDue: string;
+  deltaDays: number;
 }
-
-const MOCK_SECTIONS: Section[] = [
-  { id: "s1", name: "To Do", projectId: "p1", position: 0, taskIds: ["t1", "t2"], createdAt: "" },
-  { id: "s2", name: "In Progress", projectId: "p1", position: 1, taskIds: ["t3"], createdAt: "" },
-  { id: "s3", name: "Review", projectId: "p1", position: 2, taskIds: [], createdAt: "" },
-];
-
-const MOCK_TASKS: Task[] = [
-  makeTask({ id: "t1", title: "Research & discovery", sectionId: "s1", priority: "high", assigneeId: "u1", startDate: "2026-03-25", dueDate: "2026-04-04", position: 0 }),
-  makeTask({ id: "t2", title: "Define requirements", sectionId: "s1", priority: "medium", assigneeId: "u2", startDate: "2026-04-02", dueDate: "2026-04-08", dependencyIds: ["dep1"], position: 1 }),
-  makeTask({ id: "t3", title: "Backend API", sectionId: "s2", priority: "high", assigneeId: "u2", startDate: "2026-04-07", dueDate: "2026-04-18", position: 0 }),
-  makeTask({ id: "t4", title: "Frontend implementation", sectionId: "s2", priority: "high", assigneeId: "u1", startDate: "2026-04-10", dueDate: "2026-04-22", dependencyIds: ["dep2"], position: 1 }),
-  makeTask({ id: "t5", title: "Integration tests", sectionId: "s2", priority: "medium", assigneeId: "u3", startDate: "2026-04-20", dueDate: "2026-04-25", position: 2 }),
-  makeTask({ id: "t6", title: "QA & bug fixes", sectionId: "s3", priority: "medium", assigneeId: "u3", startDate: "2026-04-23", dueDate: "2026-04-29", position: 0 }),
-  makeTask({ id: "t7", title: "Production deploy", sectionId: "s3", priority: "high", assigneeId: "u2", startDate: "2026-04-30", dueDate: "2026-04-30", taskType: "milestone", position: 1 }),
-];
-
-const MOCK_DEPENDENCIES: Dependency[] = [
-  { id: "d1", blockingTaskId: "t1", blockedTaskId: "t2", createdAt: "" },
-  { id: "d2", blockingTaskId: "t2", blockedTaskId: "t3", createdAt: "" },
-];
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const PRIORITY_COLORS: Record<TaskPriority, string> = {
-  high: "bg-red-400",
-  medium: "bg-orange-400",
-  low: "bg-blue-400",
-  none: "bg-indigo-400",
-};
+const MS_PER_DAY = 86400000;
 
-const SECTION_COLORS = ["bg-indigo-400", "bg-emerald-400", "bg-amber-400", "bg-pink-400", "bg-cyan-400"];
+function startOfDay(d: Date): Date {
+  const r = new Date(d);
+  r.setHours(0, 0, 0, 0);
+  return r;
+}
 
-function getColumnWidth(zoom: ZoomLevel): number {
-  switch (zoom) {
-    case "day": return 40;
-    case "week": return 120;
-    case "month": return 180;
+function addDays(d: Date, n: number): Date {
+  const r = new Date(d);
+  r.setDate(r.getDate() + n);
+  return r;
+}
+
+function diffDays(a: Date, b: Date): number {
+  return Math.round((startOfDay(a).getTime() - startOfDay(b).getTime()) / MS_PER_DAY);
+}
+
+function formatShort(d: Date): string {
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function formatMonth(d: Date): string {
+  return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function toISODate(d: Date): string {
+  return startOfDay(d).toISOString();
+}
+
+// ---------------------------------------------------------------------------
+// Critical path computation (forward/backward pass)
+// ---------------------------------------------------------------------------
+
+interface CPMNode {
+  id: string;
+  duration: number; // days
+  earlyStart: number;
+  earlyFinish: number;
+  lateStart: number;
+  lateFinish: number;
+  slack: number;
+}
+
+function computeCriticalPath(
+  tasks: Task[],
+  deps: { blockerTaskId: string; blockedTaskId: string }[]
+): Record<string, CPMNode> {
+  const taskIds = new Set(tasks.map((t) => t.id));
+  const relevantDeps = deps.filter(
+    (d) => taskIds.has(d.blockerTaskId) && taskIds.has(d.blockedTaskId)
+  );
+
+  // Build adjacency
+  const successors: Record<string, string[]> = {};
+  const predecessors: Record<string, string[]> = {};
+  for (const t of tasks) {
+    successors[t.id] = [];
+    predecessors[t.id] = [];
   }
+  for (const d of relevantDeps) {
+    successors[d.blockerTaskId].push(d.blockedTaskId);
+    predecessors[d.blockedTaskId].push(d.blockerTaskId);
+  }
+
+  // Topological sort (Kahn's)
+  const indeg: Record<string, number> = {};
+  for (const t of tasks) indeg[t.id] = predecessors[t.id].length;
+  const queue: string[] = tasks.filter((t) => indeg[t.id] === 0).map((t) => t.id);
+  const topo: string[] = [];
+  while (queue.length) {
+    const id = queue.shift()!;
+    topo.push(id);
+    for (const s of successors[id]) {
+      indeg[s]--;
+      if (indeg[s] === 0) queue.push(s);
+    }
+  }
+  // If there's a cycle, topo will have fewer nodes; just append the rest to avoid crashes
+  if (topo.length < tasks.length) {
+    for (const t of tasks) if (!topo.includes(t.id)) topo.push(t.id);
+  }
+
+  const nodes: Record<string, CPMNode> = {};
+  for (const t of tasks) {
+    const s = t.startDate ? new Date(t.startDate) : new Date();
+    const e = t.dueDate ? new Date(t.dueDate) : s;
+    const dur = Math.max(diffDays(e, s), 1);
+    nodes[t.id] = {
+      id: t.id,
+      duration: dur,
+      earlyStart: 0,
+      earlyFinish: dur,
+      lateStart: 0,
+      lateFinish: 0,
+      slack: 0,
+    };
+  }
+
+  // Forward pass
+  for (const id of topo) {
+    const preds = predecessors[id];
+    const es = preds.length === 0 ? 0 : Math.max(...preds.map((p) => nodes[p].earlyFinish));
+    nodes[id].earlyStart = es;
+    nodes[id].earlyFinish = es + nodes[id].duration;
+  }
+
+  // Project finish time
+  const projectFinish = Math.max(0, ...Object.values(nodes).map((n) => n.earlyFinish));
+
+  // Backward pass
+  for (let i = topo.length - 1; i >= 0; i--) {
+    const id = topo[i];
+    const succs = successors[id];
+    const lf =
+      succs.length === 0 ? projectFinish : Math.min(...succs.map((s) => nodes[s].lateStart));
+    nodes[id].lateFinish = lf;
+    nodes[id].lateStart = lf - nodes[id].duration;
+    nodes[id].slack = nodes[id].lateStart - nodes[id].earlyStart;
+  }
+
+  return nodes;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function TimelineView({
-  sections: sectionsProp,
-  tasks: tasksProp,
-  dependencies: depsProp,
-  users = MOCK_USERS,
-  onTaskClick,
-  className,
-}: TimelineViewProps) {
-  const sections = sectionsProp ?? MOCK_SECTIONS;
-  const tasks = tasksProp ?? MOCK_TASKS;
-  const dependencies = depsProp ?? MOCK_DEPENDENCIES;
+export function TimelineView({ projectId, onTaskClick, className }: TimelineViewProps) {
+  const allTasks = useAppStore((s) => s.getProjectTasks(projectId));
+  const taskDeps = useAppStore((s) => s.taskDeps);
+  const updateTask = useAppStore((s) => s.updateTask);
 
-  const [zoom, setZoom] = useState<ZoomLevel>("day");
+  // Only tasks with both startDate and dueDate
+  const tasks = useMemo(
+    () => allTasks.filter((t) => t.startDate && t.dueDate),
+    [allTasks]
+  );
+
+  // Only deps whose endpoints are both present in tasks
+  const relevantDeps = useMemo(() => {
+    const ids = new Set(tasks.map((t) => t.id));
+    return taskDeps.filter((d) => ids.has(d.blockerTaskId) && ids.has(d.blockedTaskId));
+  }, [tasks, taskDeps]);
+
+  const [zoom, setZoom] = useState<ZoomLevel>("week");
+  const [dragState, setDragState] = useState<DragState | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Compute date range
-  const { rangeStart, rangeEnd, columns } = useMemo(() => {
-    const allDates: Date[] = [];
+  const pxPerDay = ZOOM_PX_PER_DAY[zoom];
+
+  // Date range
+  const { rangeStart, rangeEnd, totalDays } = useMemo(() => {
+    const dates: Date[] = [];
     for (const t of tasks) {
-      if (t.startDate) allDates.push(new Date(t.startDate));
-      if (t.dueDate) allDates.push(new Date(t.dueDate));
+      if (t.startDate) dates.push(new Date(t.startDate));
+      if (t.dueDate) dates.push(new Date(t.dueDate));
     }
-    if (allDates.length === 0) {
-      allDates.push(new Date());
+    if (dates.length === 0) {
+      const now = startOfDay(new Date());
+      return { rangeStart: now, rangeEnd: addDays(now, 30), totalDays: 30 };
     }
+    const min = dates.reduce((a, b) => (a < b ? a : b));
+    const max = dates.reduce((a, b) => (a > b ? a : b));
+    const start = addDays(startOfDay(min), -3);
+    const end = addDays(startOfDay(max), 7);
+    return { rangeStart: start, rangeEnd: end, totalDays: Math.max(diffDays(end, start), 1) };
+  }, [tasks]);
 
-    const minDate = allDates.reduce((a, b) => (a < b ? a : b));
-    const maxDate = allDates.reduce((a, b) => (a > b ? a : b));
+  const totalWidth = totalDays * pxPerDay;
 
-    // Add padding
-    const start = addDays(startOfDay(minDate), -7);
-    const end = addDays(startOfDay(maxDate), 14);
-
-    let cols: { date: Date; label: string }[] = [];
+  // Column headers based on zoom
+  const columns = useMemo(() => {
+    const cols: { date: Date; label: string; isToday: boolean }[] = [];
+    const today = startOfDay(new Date());
     if (zoom === "day") {
-      const days = eachDayOfInterval({ start, end });
-      cols = days.map((d) => ({ date: d, label: format(d, "d") }));
+      for (let i = 0; i < totalDays; i++) {
+        const d = addDays(rangeStart, i);
+        cols.push({ date: d, label: String(d.getDate()), isToday: isSameDay(d, today) });
+      }
     } else if (zoom === "week") {
-      const weeks = eachWeekOfInterval({ start, end }, { weekStartsOn: 1 });
-      cols = weeks.map((d) => ({ date: d, label: format(d, "MMM d") }));
+      for (let i = 0; i < totalDays; i += 7) {
+        const d = addDays(rangeStart, i);
+        cols.push({ date: d, label: formatShort(d), isToday: false });
+      }
     } else {
-      const months = eachMonthOfInterval({ start, end });
-      cols = months.map((d) => ({ date: d, label: format(d, "MMM yyyy") }));
+      // month - step per month
+      let d = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
+      while (d <= rangeEnd) {
+        cols.push({ date: new Date(d), label: formatMonth(d), isToday: false });
+        d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      }
     }
+    return cols;
+  }, [zoom, rangeStart, rangeEnd, totalDays]);
 
-    return { rangeStart: start, rangeEnd: end, columns: cols };
-  }, [tasks, zoom]);
+  const colWidth =
+    zoom === "day" ? pxPerDay : zoom === "week" ? pxPerDay * 7 : pxPerDay * 30;
 
-  const colWidth = getColumnWidth(zoom);
-  const totalWidth = columns.length * colWidth;
+  // Critical path
+  const cpm = useMemo(() => computeCriticalPath(tasks, relevantDeps), [tasks, relevantDeps]);
+  const projectFinish = useMemo(
+    () => Math.max(0, ...Object.values(cpm).map((n) => n.earlyFinish)),
+    [cpm]
+  );
+  const isOnCriticalPath = useCallback(
+    (taskId: string) => {
+      const n = cpm[taskId];
+      if (!n) return false;
+      // Must have slack 0 AND be reachable to/from the critical endpoints
+      return projectFinish > 0 && n.slack === 0 && n.earlyFinish === projectFinish
+        ? true
+        : n.slack === 0;
+    },
+    [cpm, projectFinish]
+  );
 
-  // Group tasks by section
-  const tasksBySection = useMemo(() => {
-    const map: Record<string, Task[]> = {};
-    for (const sec of sections) map[sec.id] = [];
-    for (const t of tasks) {
-      if (t.sectionId && map[t.sectionId]) map[t.sectionId].push(t);
-    }
-    for (const key of Object.keys(map)) {
-      map[key].sort((a, b) => a.position - b.position);
-    }
-    return map;
-  }, [sections, tasks]);
+  // Sort tasks by startDate for row order
+  const sortedTasks = useMemo(
+    () =>
+      [...tasks].sort((a, b) => {
+        const sa = a.startDate ? new Date(a.startDate).getTime() : 0;
+        const sb = b.startDate ? new Date(b.startDate).getTime() : 0;
+        return sa - sb;
+      }),
+    [tasks]
+  );
 
-  // Build flat row list: section headers + tasks
-  const rows: Array<{ type: "section"; section: Section } | { type: "task"; task: Task; sectionIndex: number }> = [];
-  sections.sort((a, b) => (a.position as number) - (b.position as number)).forEach((sec, si) => {
-    rows.push({ type: "section", section: sec });
-    (tasksBySection[sec.id] ?? []).forEach((t) => {
-      rows.push({ type: "task", task: t, sectionIndex: si });
+  const taskRowIndex = useMemo(() => {
+    const m: Record<string, number> = {};
+    sortedTasks.forEach((t, i) => {
+      m[t.id] = i;
     });
-  });
+    return m;
+  }, [sortedTasks]);
 
   const ROW_HEIGHT = 40;
-  const HEADER_HEIGHT = 60;
-  const SIDEBAR_WIDTH = 260;
+  const HEADER_HEIGHT = 40;
+  const SIDEBAR_WIDTH = 240;
+  const BAR_HEIGHT = 24;
 
-  // Position a bar for a task
-  function getBarStyle(task: Task) {
-    const s = task.startDate ? new Date(task.startDate) : task.dueDate ? new Date(task.dueDate) : null;
-    const e = task.dueDate ? new Date(task.dueDate) : s;
-    if (!s || !e) return null;
+  // Bar position for a task, with optional drag offset
+  const getBarPos = useCallback(
+    (task: Task) => {
+      if (!task.startDate || !task.dueDate) return null;
+      let s = new Date(task.startDate);
+      let e = new Date(task.dueDate);
+      if (dragState && dragState.taskId === task.id) {
+        s = addDays(s, dragState.deltaDays);
+        e = addDays(e, dragState.deltaDays);
+      }
+      const left = diffDays(s, rangeStart) * pxPerDay;
+      const width = Math.max(diffDays(e, s) * pxPerDay, 8);
+      return { left, width };
+    },
+    [dragState, rangeStart, pxPerDay]
+  );
 
-    const totalDays = differenceInCalendarDays(rangeEnd, rangeStart) || 1;
-    const startOffset = differenceInCalendarDays(s, rangeStart);
-    const duration = Math.max(differenceInCalendarDays(e, s), 1);
+  // Drag handlers
+  const handleMouseDown = useCallback((e: React.MouseEvent, task: Task) => {
+    if (!task.startDate || !task.dueDate) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setDragState({
+      taskId: task.id,
+      startX: e.clientX,
+      originalStart: task.startDate,
+      originalDue: task.dueDate,
+      deltaDays: 0,
+    });
+  }, []);
 
-    const pxPerDay = totalWidth / (columns.length * (zoom === "day" ? 1 : zoom === "week" ? 7 : 30));
-    const left = (startOffset / totalDays) * totalWidth;
-    const width = Math.max((duration / totalDays) * totalWidth, 8);
+  useEffect(() => {
+    if (!dragState) return;
 
-    return { left: Math.max(left, 0), width };
-  }
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaPx = e.clientX - dragState.startX;
+      const deltaDays = Math.round(deltaPx / pxPerDay);
+      if (deltaDays !== dragState.deltaDays) {
+        setDragState({ ...dragState, deltaDays });
+      }
+    };
 
-  // Today line position
+    const handleMouseUp = () => {
+      if (dragState.deltaDays !== 0) {
+        const newStart = toISODate(addDays(new Date(dragState.originalStart), dragState.deltaDays));
+        const newDue = toISODate(addDays(new Date(dragState.originalDue), dragState.deltaDays));
+        void updateTask(dragState.taskId, { startDate: newStart, dueDate: newDue });
+      }
+      setDragState(null);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [dragState, pxPerDay, updateTask]);
+
+  // Today line
   const todayOffset = useMemo(() => {
     const today = startOfDay(new Date());
-    if (isBefore(today, rangeStart) || isAfter(today, rangeEnd)) return null;
-    const totalDays = differenceInCalendarDays(rangeEnd, rangeStart) || 1;
-    const offset = differenceInCalendarDays(today, rangeStart);
-    return (offset / totalDays) * totalWidth;
-  }, [rangeStart, rangeEnd, totalWidth]);
+    if (today < rangeStart || today > rangeEnd) return null;
+    return diffDays(today, rangeStart) * pxPerDay;
+  }, [rangeStart, rangeEnd, pxPerDay]);
 
-  // Month headers for day zoom
-  const monthHeaders = useMemo(() => {
-    if (zoom !== "day") return [];
-    const headers: { label: string; left: number; width: number }[] = [];
-    let currentMonth = "";
-    let startIdx = 0;
-    columns.forEach((col, i) => {
-      const m = format(col.date, "MMMM yyyy");
-      if (m !== currentMonth) {
-        if (currentMonth) {
-          headers.push({ label: currentMonth, left: startIdx * colWidth, width: (i - startIdx) * colWidth });
-        }
-        currentMonth = m;
-        startIdx = i;
-      }
-    });
-    if (currentMonth) {
-      headers.push({ label: currentMonth, left: startIdx * colWidth, width: (columns.length - startIdx) * colWidth });
-    }
-    return headers;
-  }, [columns, zoom, colWidth]);
+  // Dependency arrows
+  const depArrows = useMemo(() => {
+    return relevantDeps
+      .map((dep) => {
+        const blocker = tasks.find((t) => t.id === dep.blockerTaskId);
+        const blocked = tasks.find((t) => t.id === dep.blockedTaskId);
+        if (!blocker || !blocked) return null;
+        const bPos = getBarPos(blocker);
+        const tPos = getBarPos(blocked);
+        if (!bPos || !tPos) return null;
+        const bRow = taskRowIndex[blocker.id];
+        const tRow = taskRowIndex[blocked.id];
+        if (bRow === undefined || tRow === undefined) return null;
+        const x1 = bPos.left + bPos.width;
+        const y1 = bRow * ROW_HEIGHT + ROW_HEIGHT / 2;
+        const x2 = tPos.left;
+        const y2 = tRow * ROW_HEIGHT + ROW_HEIGHT / 2;
+        return { id: dep.id, x1, y1, x2, y2 };
+      })
+      .filter((x): x is { id: string; x1: number; y1: number; x2: number; y2: number } => x !== null);
+  }, [relevantDeps, tasks, getBarPos, taskRowIndex]);
 
-  // Dependency arrows (simple SVG lines)
-  const taskRowIndex = useMemo(() => {
-    const map: Record<string, number> = {};
-    rows.forEach((r, i) => {
-      if (r.type === "task") map[r.task.id] = i;
-    });
-    return map;
-  }, [rows]);
-
-  const depLines = useMemo(() => {
-    return dependencies.map((dep) => {
-      const sourceTask = tasks.find((t) => t.id === dep.blockingTaskId);
-      const targetTask = tasks.find((t) => t.id === dep.blockedTaskId);
-      if (!sourceTask || !targetTask) return null;
-
-      const sourceBar = getBarStyle(sourceTask);
-      const targetBar = getBarStyle(targetTask);
-      if (!sourceBar || !targetBar) return null;
-
-      const sourceRow = taskRowIndex[dep.blockingTaskId];
-      const targetRow = taskRowIndex[dep.blockedTaskId];
-      if (sourceRow === undefined || targetRow === undefined) return null;
-
-      const x1 = sourceBar.left + sourceBar.width;
-      const y1 = sourceRow * ROW_HEIGHT + ROW_HEIGHT / 2;
-      const x2 = targetBar.left;
-      const y2 = targetRow * ROW_HEIGHT + ROW_HEIGHT / 2;
-
-      return { id: dep.id, x1, y1, x2, y2 };
-    }).filter(Boolean) as Array<{ id: string; x1: number; y1: number; x2: number; y2: number }>;
-  }, [dependencies, tasks, taskRowIndex]);
+  if (tasks.length === 0) {
+    return (
+      <div className={cn("flex h-full flex-col items-center justify-center bg-white", className)}>
+        <div className="text-center">
+          <p className="text-sm font-medium text-gray-900">No tasks with dates</p>
+          <p className="mt-1 text-sm text-gray-500">
+            Add start dates and due dates to tasks to see them on the timeline.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={cn("flex h-full flex-col overflow-hidden bg-white", className)}>
@@ -272,87 +391,57 @@ export function TimelineView({
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-2">
         <div className="flex items-center gap-1">
           {(["day", "week", "month"] as ZoomLevel[]).map((level) => (
-            <Button
+            <button
               key={level}
-              variant={zoom === level ? "primary" : "ghost"}
-              size="sm"
               onClick={() => setZoom(level)}
-              className="capitalize"
+              className={cn(
+                "rounded px-3 py-1 text-sm font-medium capitalize transition",
+                zoom === level
+                  ? "bg-indigo-600 text-white"
+                  : "text-gray-600 hover:bg-gray-100"
+              )}
             >
               {level}
-            </Button>
+            </button>
           ))}
         </div>
-        <div className="flex items-center gap-1">
-          <Tooltip content="Zoom out">
-            <span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => {
-                  if (zoom === "day") setZoom("week");
-                  else if (zoom === "week") setZoom("month");
-                }}
-              >
-                <ZoomOut className="h-4 w-4" />
-              </Button>
-            </span>
-          </Tooltip>
-          <Tooltip content="Zoom in">
-            <span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => {
-                  if (zoom === "month") setZoom("week");
-                  else if (zoom === "week") setZoom("day");
-                }}
-              >
-                <ZoomIn className="h-4 w-4" />
-              </Button>
-            </span>
-          </Tooltip>
+        <div className="flex items-center gap-3 text-xs text-gray-500">
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-2 w-4 rounded bg-red-500" />
+            Critical path
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-2 w-4 rounded bg-indigo-500" />
+            Task
+          </span>
         </div>
       </div>
 
-      {/* Timeline body */}
+      {/* Body */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left sidebar - task names */}
+        {/* Sidebar */}
         <div className="flex-shrink-0 border-r border-gray-200" style={{ width: SIDEBAR_WIDTH }}>
-          {/* Sidebar header */}
           <div
-            className="flex items-center border-b border-gray-200 bg-gray-50 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide"
+            className="flex items-center border-b border-gray-200 bg-gray-50 px-4 text-xs font-semibold uppercase tracking-wide text-gray-500"
             style={{ height: HEADER_HEIGHT }}
           >
             Task
           </div>
-          {/* Sidebar rows */}
-          <div className="overflow-y-auto">
-            {rows.map((row, i) => {
-              if (row.type === "section") {
-                return (
-                  <div
-                    key={row.section.id}
-                    className="flex items-center bg-gray-50 px-4 text-xs font-semibold text-gray-700 border-b border-gray-100"
-                    style={{ height: ROW_HEIGHT }}
-                  >
-                    {row.section.name}
-                  </div>
-                );
-              }
-              const task = row.task;
-              const member = task.assigneeId ? users[task.assigneeId] : null;
+          <div>
+            {sortedTasks.map((task) => {
+              const critical = isOnCriticalPath(task.id);
               return (
                 <div
                   key={task.id}
-                  className="flex items-center gap-2 px-4 border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition-colors"
+                  className="flex items-center gap-2 border-b border-gray-50 px-4 hover:bg-gray-50"
                   style={{ height: ROW_HEIGHT }}
                   onClick={() => onTaskClick?.(task.id)}
                 >
-                  {member && (
-                    <Avatar size="sm" name={member.name} src={member.avatar as string | undefined} />
+                  {critical && (
+                    <span
+                      className="inline-block h-2 w-2 flex-shrink-0 rounded-full bg-red-500"
+                      title="On critical path"
+                    />
                   )}
                   <span className="truncate text-sm text-gray-800">{task.title}</span>
                 </div>
@@ -361,83 +450,60 @@ export function TimelineView({
           </div>
         </div>
 
-        {/* Right side - timeline grid */}
+        {/* Grid */}
         <div className="flex-1 overflow-auto" ref={scrollRef}>
           <div style={{ width: totalWidth, minWidth: "100%" }}>
-            {/* Column headers */}
-            <div className="sticky top-0 z-10 bg-white border-b border-gray-200" style={{ height: HEADER_HEIGHT }}>
-              {/* Month row (day zoom) */}
-              {zoom === "day" && (
-                <div className="relative flex border-b border-gray-100" style={{ height: HEADER_HEIGHT / 2 }}>
-                  {monthHeaders.map((mh, i) => (
-                    <div
-                      key={i}
-                      className="absolute flex items-center px-2 text-xs font-semibold text-gray-600 border-r border-gray-100"
-                      style={{ left: mh.left, width: mh.width, height: HEADER_HEIGHT / 2 }}
-                    >
-                      {mh.label}
-                    </div>
-                  ))}
+            {/* Header */}
+            <div
+              className="sticky top-0 z-10 flex border-b border-gray-200 bg-white"
+              style={{ height: HEADER_HEIGHT }}
+            >
+              {columns.map((col, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    "flex items-center justify-center border-r border-gray-100 text-xs text-gray-500",
+                    col.isToday && "bg-red-50 font-semibold text-red-600"
+                  )}
+                  style={{ width: colWidth, flexShrink: 0 }}
+                >
+                  {col.label}
                 </div>
-              )}
-              {/* Date columns */}
-              <div
-                className="relative flex"
-                style={{ height: zoom === "day" ? HEADER_HEIGHT / 2 : HEADER_HEIGHT }}
-              >
-                {columns.map((col, i) => (
-                  <div
-                    key={i}
-                    className={cn(
-                      "flex items-center justify-center border-r border-gray-100 text-xs text-gray-500",
-                      isToday(col.date) && "bg-red-50 font-semibold text-red-600"
-                    )}
-                    style={{ width: colWidth, flexShrink: 0 }}
-                  >
-                    {zoom === "day" ? (
-                      <div className="flex flex-col items-center leading-tight">
-                        <span className="text-[10px] text-gray-400">{format(col.date, "EEE")}</span>
-                        <span>{col.label}</span>
-                      </div>
-                    ) : (
-                      col.label
-                    )}
-                  </div>
-                ))}
-              </div>
+              ))}
             </div>
 
-            {/* Rows with bars */}
-            <div className="relative">
-              {/* Grid lines */}
-              <div className="absolute inset-0 flex pointer-events-none" aria-hidden>
-                {columns.map((_, i) => (
-                  <div
-                    key={i}
-                    className="border-r border-gray-50"
-                    style={{ width: colWidth, flexShrink: 0, height: rows.length * ROW_HEIGHT }}
-                  />
-                ))}
-              </div>
+            {/* Rows + bars */}
+            <div
+              className="relative"
+              style={{ height: sortedTasks.length * ROW_HEIGHT, width: totalWidth }}
+            >
+              {/* Row backgrounds */}
+              {sortedTasks.map((task, i) => (
+                <div
+                  key={`row-${task.id}`}
+                  className="absolute left-0 right-0 border-b border-gray-50"
+                  style={{ top: i * ROW_HEIGHT, height: ROW_HEIGHT }}
+                />
+              ))}
 
               {/* Today line */}
               {todayOffset !== null && (
                 <div
-                  className="absolute top-0 bottom-0 w-0.5 bg-red-400 z-20 pointer-events-none"
-                  style={{ left: todayOffset, height: rows.length * ROW_HEIGHT }}
+                  className="pointer-events-none absolute top-0 z-20 w-0.5 bg-red-400"
+                  style={{ left: todayOffset, height: sortedTasks.length * ROW_HEIGHT }}
                 />
               )}
 
               {/* Dependency arrows */}
               <svg
-                className="absolute top-0 left-0 pointer-events-none z-10"
+                className="pointer-events-none absolute left-0 top-0 z-10"
                 width={totalWidth}
-                height={rows.length * ROW_HEIGHT}
+                height={sortedTasks.length * ROW_HEIGHT}
                 style={{ overflow: "visible" }}
               >
                 <defs>
                   <marker
-                    id="arrowhead"
+                    id="tl-arrowhead"
                     markerWidth="8"
                     markerHeight="6"
                     refX="8"
@@ -447,66 +513,65 @@ export function TimelineView({
                     <polygon points="0 0, 8 3, 0 6" fill="#94a3b8" />
                   </marker>
                 </defs>
-                {depLines.map((line) => {
-                  const midX = (line.x1 + line.x2) / 2;
+                {depArrows.map((arr) => {
+                  const midX = (arr.x1 + arr.x2) / 2;
                   return (
                     <path
-                      key={line.id}
-                      d={`M ${line.x1} ${line.y1} C ${midX} ${line.y1}, ${midX} ${line.y2}, ${line.x2} ${line.y2}`}
+                      key={arr.id}
+                      d={`M ${arr.x1} ${arr.y1} C ${midX} ${arr.y1}, ${midX} ${arr.y2}, ${arr.x2} ${arr.y2}`}
                       fill="none"
                       stroke="#94a3b8"
                       strokeWidth={1.5}
-                      strokeDasharray="4 2"
-                      markerEnd="url(#arrowhead)"
+                      markerEnd="url(#tl-arrowhead)"
                     />
                   );
                 })}
               </svg>
 
-              {/* Task rows */}
-              {rows.map((row, i) => {
-                if (row.type === "section") {
-                  return (
-                    <div
-                      key={row.section.id}
-                      className="relative bg-gray-50/60 border-b border-gray-100"
-                      style={{ height: ROW_HEIGHT }}
-                    />
-                  );
-                }
-
-                const task = row.task;
-                const barStyle = getBarStyle(task);
-                const colorClass = SECTION_COLORS[row.sectionIndex % SECTION_COLORS.length];
-
+              {/* Task bars */}
+              {sortedTasks.map((task, i) => {
+                const pos = getBarPos(task);
+                if (!pos) return null;
+                const critical = isOnCriticalPath(task.id);
+                const dragging = dragState?.taskId === task.id;
+                const top = i * ROW_HEIGHT + (ROW_HEIGHT - BAR_HEIGHT) / 2;
                 return (
                   <div
-                    key={task.id}
-                    className="relative border-b border-gray-50"
-                    style={{ height: ROW_HEIGHT }}
-                  >
-                    {barStyle && (
-                      <Tooltip content={`${task.title}${task.startDate ? ` (${format(new Date(task.startDate), "MMM d")} - ${task.dueDate ? format(new Date(task.dueDate), "MMM d") : "?"})` : ""}`}>
-                        <button
-                          className={cn(
-                            "absolute top-1.5 h-[26px] rounded-md shadow-sm cursor-pointer hover:brightness-110 transition-all flex items-center px-2 text-white text-[11px] font-medium truncate",
-                            task.taskType === "milestone" ? "bg-amber-500 rounded-full w-6 h-6 top-2 px-0 justify-center" : colorClass,
-                            task.completed && "opacity-60"
-                          )}
-                          style={task.taskType === "milestone"
-                            ? { left: barStyle.left - 12, width: 26 }
-                            : { left: barStyle.left, width: barStyle.width }
-                          }
-                          onClick={() => onTaskClick?.(task.id)}
-                        >
-                          {task.taskType === "milestone" ? (
-                            <span className="text-[10px]">&#9670;</span>
-                          ) : (
-                            barStyle.width > 60 ? task.title : ""
-                          )}
-                        </button>
-                      </Tooltip>
+                    key={`bar-${task.id}`}
+                    role="button"
+                    tabIndex={0}
+                    onMouseDown={(e) => handleMouseDown(e, task)}
+                    onClick={(e) => {
+                      // Only treat as click if no drag happened
+                      if (!dragState || dragState.deltaDays === 0) {
+                        onTaskClick?.(task.id);
+                      }
+                      e.stopPropagation();
+                    }}
+                    className={cn(
+                      "absolute flex items-center rounded-md px-2 text-[11px] font-medium text-white shadow-sm transition-opacity",
+                      "cursor-grab active:cursor-grabbing hover:brightness-110",
+                      critical ? "bg-red-500" : "bg-indigo-500",
+                      task.completed && "opacity-60",
+                      dragging && "z-30 ring-2 ring-indigo-300"
                     )}
+                    style={{
+                      left: pos.left,
+                      width: pos.width,
+                      top,
+                      height: BAR_HEIGHT,
+                    }}
+                    title={`${task.title}${
+                      task.startDate
+                        ? ` (${formatShort(new Date(task.startDate))} - ${
+                            task.dueDate ? formatShort(new Date(task.dueDate)) : "?"
+                          })`
+                        : ""
+                    }`}
+                  >
+                    <span className="truncate">
+                      {pos.width > 50 ? task.title : ""}
+                    </span>
                   </div>
                 );
               })}

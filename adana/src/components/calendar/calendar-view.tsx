@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   format,
   startOfMonth,
@@ -14,68 +14,27 @@ import {
   isSameDay,
   isToday,
 } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Tooltip } from "@/components/ui/tooltip";
-import { Avatar } from "@/components/ui/avatar";
-import type { Task, User, TaskPriority } from "@/types";
+import { useAppStore } from "@/store/app-store";
+import type { Task, TaskPriority } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 export interface CalendarViewProps {
-  tasks?: Task[];
-  users?: Record<string, User>;
+  projectId: string;
   onTaskClick?: (taskId: string) => void;
-  onDayClick?: (date: Date) => void;
-  onAddTask?: (date: Date) => void;
   className?: string;
 }
-
-// ---------------------------------------------------------------------------
-// Mock data
-// ---------------------------------------------------------------------------
-
-const MOCK_USERS: Record<string, User> = {
-  u1: { id: "u1", name: "Alice Chen", email: "alice@example.com", avatarUrl: null, bio: null, role: "member", teamIds: ["t1"], createdAt: "", updatedAt: "" },
-  u2: { id: "u2", name: "Bob Park", email: "bob@example.com", avatarUrl: null, bio: null, role: "member", teamIds: ["t1"], createdAt: "", updatedAt: "" },
-  u3: { id: "u3", name: "Carol Smith", email: "carol@example.com", avatarUrl: null, bio: null, role: "member", teamIds: ["t1"], createdAt: "", updatedAt: "" },
-};
-
-function makeTask(overrides: Partial<Task> & { id: string; title: string }): Task {
-  return {
-    description: null, htmlDescription: null, status: "not_started", priority: "none",
-    taskType: "task", completed: false, isTemplate: false, completedAt: null, assigneeId: null, creatorId: "u1", projectId: "p1",
-    sectionId: null, parentTaskId: null, position: 0, dueDate: null, startDate: null,
-    estimatedMinutes: null, actualMinutes: null, tagIds: [], followerIds: [], subtaskIds: [],
-    dependencyIds: [], approvalStatus: null, approverIds: [], likes: [], attachmentCount: 0,
-    commentCount: 0, customFieldValues: [], createdAt: "", updatedAt: "",
-    ...overrides,
-  };
-}
-
-const MOCK_TASKS: Task[] = [
-  makeTask({ id: "t1", title: "Design review", priority: "high", assigneeId: "u1", dueDate: "2026-04-03" } as any),
-  makeTask({ id: "t2", title: "Sprint planning", priority: "medium", assigneeId: "u2", dueDate: "2026-04-03" } as any),
-  makeTask({ id: "t3", title: "API endpoints", priority: "high", assigneeId: "u2", dueDate: "2026-04-05" } as any),
-  makeTask({ id: "t4", title: "Write tests", priority: "low", assigneeId: "u3", dueDate: "2026-04-08" } as any),
-  makeTask({ id: "t5", title: "Deploy staging", priority: "medium", dueDate: "2026-04-10" } as any),
-  makeTask({ id: "t6", title: "Client demo", priority: "high", assigneeId: "u1", dueDate: "2026-04-14", taskType: "milestone" } as any),
-  makeTask({ id: "t7", title: "Bug triage", priority: "medium", assigneeId: "u3", dueDate: "2026-04-15" } as any),
-  makeTask({ id: "t8", title: "Release v2.0", priority: "high", assigneeId: "u2", dueDate: "2026-04-22", taskType: "milestone" } as any),
-  makeTask({ id: "t9", title: "Retrospective", priority: "low", dueDate: "2026-04-25" } as any),
-  makeTask({ id: "t10", title: "Update docs", priority: "low", assigneeId: "u1", dueDate: "2026-04-28" } as any),
-  makeTask({ id: "t11", title: "Database migration", priority: "high", assigneeId: "u2", dueDate: "2026-04-10" } as any),
-  makeTask({ id: "t12", title: "Performance audit", priority: "medium", assigneeId: "u3", dueDate: "2026-04-17" } as any),
-];
 
 // ---------------------------------------------------------------------------
 // Priority colors for chips
 // ---------------------------------------------------------------------------
 
-const PRIORITY_CHIP_COLORS: Record<TaskPriority, string> = {
+const PRIORITY_CHIP_COLORS: Record<string, string> = {
   high: "bg-red-100 text-red-700 border-red-200",
   medium: "bg-orange-100 text-orange-700 border-orange-200",
   low: "bg-blue-100 text-blue-700 border-blue-200",
@@ -89,15 +48,20 @@ const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 // ---------------------------------------------------------------------------
 
 export function CalendarView({
-  tasks: tasksProp,
-  users = MOCK_USERS,
+  projectId,
   onTaskClick,
-  onDayClick,
-  onAddTask,
   className,
 }: CalendarViewProps) {
-  const tasks = tasksProp ?? MOCK_TASKS;
+  const tasks = useAppStore((s) => s.getProjectTasks(projectId));
+  const updateTask = useAppStore((s) => s.updateTask);
+  const createTask = useAppStore((s) => s.createTask);
+
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [dragTaskId, setDragTaskId] = useState<string | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+  const [creatingKey, setCreatingKey] = useState<string | null>(null);
+  const [newTitle, setNewTitle] = useState("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -106,23 +70,110 @@ export function CalendarView({
 
   const days = useMemo(
     () => eachDayOfInterval({ start: calendarStart, end: calendarEnd }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [calendarStart.getTime(), calendarEnd.getTime()]
   );
 
-  // Group tasks by due date
+  // Ensure 6 rows x 7 cols = 42 cells
+  const cells = useMemo(() => {
+    if (days.length >= 42) return days.slice(0, 42);
+    const extra: Date[] = [];
+    const last = days[days.length - 1];
+    for (let i = 1; i <= 42 - days.length; i++) {
+      extra.push(new Date(last.getFullYear(), last.getMonth(), last.getDate() + i));
+    }
+    return [...days, ...extra];
+  }, [days]);
+
+  // Tasks with due date only, grouped
   const tasksByDate = useMemo(() => {
     const map: Record<string, Task[]> = {};
     for (const task of tasks) {
-      if (task.dueDate) {
-        const key = format(new Date(task.dueDate), "yyyy-MM-dd");
-        if (!map[key]) map[key] = [];
-        map[key].push(task);
-      }
+      if (!task.dueDate) continue;
+      const key = format(new Date(task.dueDate), "yyyy-MM-dd");
+      if (!map[key]) map[key] = [];
+      map[key].push(task);
     }
     return map;
   }, [tasks]);
 
+  useEffect(() => {
+    if (creatingKey && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [creatingKey]);
+
   const goToday = () => setCurrentDate(new Date());
+
+  // Drag handlers
+  function handleDragStart(e: React.DragEvent, taskId: string) {
+    setDragTaskId(taskId);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", taskId);
+  }
+
+  function handleDragEnd() {
+    setDragTaskId(null);
+    setDragOverKey(null);
+  }
+
+  function handleDragOver(e: React.DragEvent, key: string) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverKey !== key) setDragOverKey(key);
+  }
+
+  function handleDrop(e: React.DragEvent, cellDate: Date) {
+    e.preventDefault();
+    const taskId =
+      dragTaskId || e.dataTransfer.getData("text/plain") || null;
+    setDragOverKey(null);
+    setDragTaskId(null);
+    if (!taskId) return;
+    // Normalize to midday to avoid timezone off-by-one issues
+    const newDate = new Date(
+      cellDate.getFullYear(),
+      cellDate.getMonth(),
+      cellDate.getDate(),
+      12,
+      0,
+      0
+    );
+    updateTask(taskId, { dueDate: newDate.toISOString() });
+  }
+
+  // Create task inline
+  function openCreate(cellDate: Date) {
+    setCreatingKey(format(cellDate, "yyyy-MM-dd"));
+    setNewTitle("");
+  }
+
+  function cancelCreate() {
+    setCreatingKey(null);
+    setNewTitle("");
+  }
+
+  function submitCreate(cellDate: Date) {
+    const title = newTitle.trim();
+    if (!title) {
+      cancelCreate();
+      return;
+    }
+    const newDate = new Date(
+      cellDate.getFullYear(),
+      cellDate.getMonth(),
+      cellDate.getDate(),
+      12,
+      0,
+      0
+    );
+    createTask({
+      title,
+      dueDate: newDate.toISOString(),
+      projectId,
+    });
+    cancelCreate();
+  }
 
   return (
     <div className={cn("flex h-full flex-col bg-white", className)}>
@@ -168,26 +219,34 @@ export function CalendarView({
         ))}
       </div>
 
-      {/* Calendar grid */}
-      <div className="grid flex-1 grid-cols-7 auto-rows-fr">
-        {days.map((day) => {
+      {/* Calendar grid: 6 rows x 7 cols */}
+      <div className="grid flex-1 grid-cols-7 grid-rows-6">
+        {cells.map((day) => {
           const dateKey = format(day, "yyyy-MM-dd");
           const dayTasks = tasksByDate[dateKey] ?? [];
           const inMonth = isSameMonth(day, currentDate);
           const today = isToday(day);
+          const isDragOver = dragOverKey === dateKey;
+          const isCreating = creatingKey === dateKey;
 
           return (
             <div
               key={dateKey}
+              onDragOver={(e) => handleDragOver(e, dateKey)}
+              onDragLeave={() => {
+                if (dragOverKey === dateKey) setDragOverKey(null);
+              }}
+              onDrop={(e) => handleDrop(e, day)}
+              onClick={() => {
+                if (!isCreating) openCreate(day);
+              }}
               className={cn(
-                "group relative border-b border-r border-gray-100 p-1.5 min-h-[100px] transition-colors cursor-pointer",
+                "group relative border-b border-r border-gray-100 p-1.5 min-h-[100px] transition-colors cursor-pointer overflow-hidden",
                 !inMonth && "bg-gray-50/50",
                 today && "bg-indigo-50/40",
+                isDragOver && "bg-indigo-100 ring-2 ring-inset ring-indigo-300",
                 "hover:bg-gray-50"
               )}
-              onClick={() => {
-                onDayClick?.(day);
-              }}
             >
               {/* Day number */}
               <div className="flex items-center justify-between mb-1">
@@ -201,56 +260,63 @@ export function CalendarView({
                 >
                   {format(day, "d")}
                 </span>
-
-                {/* Add task button on hover */}
-                <button
-                  className="hidden group-hover:flex items-center justify-center h-5 w-5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAddTask?.(day);
-                  }}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
               </div>
 
               {/* Task chips */}
               <div className="flex flex-col gap-0.5">
                 {dayTasks.slice(0, 3).map((task) => {
-                  const assignee = task.assigneeId ? users[task.assigneeId] : null;
+                  const priorityKey = (task.priority ?? "none") as string;
                   return (
-                    <Tooltip
+                    <button
                       key={task.id}
-                      content={
-                        <div className="text-xs">
-                          <div className="font-medium">{task.title}</div>
-                          {assignee && <div className="text-gray-300 mt-0.5">{assignee.name}</div>}
-                        </div>
-                      }
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, task.id)}
+                      onDragEnd={handleDragEnd}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onTaskClick?.(task.id);
+                      }}
+                      title={task.title}
+                      className={cn(
+                        "w-full rounded px-1.5 py-0.5 text-left text-[11px] font-medium truncate border transition-colors hover:brightness-95 cursor-grab active:cursor-grabbing",
+                        PRIORITY_CHIP_COLORS[priorityKey] ??
+                          PRIORITY_CHIP_COLORS.none,
+                        task.completed && "opacity-50 line-through",
+                        dragTaskId === task.id && "opacity-40"
+                      )}
                     >
-                      <button
-                        className={cn(
-                          "w-full rounded px-1.5 py-0.5 text-left text-[11px] font-medium truncate border transition-colors hover:brightness-95",
-                          PRIORITY_CHIP_COLORS[(task.priority as TaskPriority) ?? "none"],
-                          task.completed && "opacity-50 line-through"
-                        )}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onTaskClick?.(task.id);
-                        }}
-                      >
-                        {task.taskType === "milestone" && (
-                          <span className="mr-0.5">&#9670;</span>
-                        )}
-                        {task.title}
-                      </button>
-                    </Tooltip>
+                      {task.taskType === "milestone" && (
+                        <span className="mr-0.5">&#9670;</span>
+                      )}
+                      {task.title}
+                    </button>
                   );
                 })}
-                {dayTasks.length > 3 && (
+                {dayTasks.length > 3 && !isCreating && (
                   <span className="text-[10px] text-gray-500 px-1.5">
                     +{dayTasks.length - 3} more
                   </span>
+                )}
+
+                {/* Inline create input */}
+                {isCreating && (
+                  <input
+                    ref={inputRef}
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === "Enter") {
+                        submitCreate(day);
+                      } else if (e.key === "Escape") {
+                        cancelCreate();
+                      }
+                    }}
+                    onBlur={() => cancelCreate()}
+                    placeholder="Task title..."
+                    className="w-full rounded border border-indigo-300 bg-white px-1.5 py-0.5 text-[11px] font-medium text-gray-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  />
                 )}
               </div>
             </div>

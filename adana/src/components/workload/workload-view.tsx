@@ -1,75 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import {
-  ChevronLeft,
-  ChevronRight,
-  AlertTriangle,
-  CheckCircle2,
-} from "lucide-react";
-
-// -- Mock data ----------------------------------------------------------------
-
-interface TeamMemberWorkload {
-  id: string;
-  name: string;
-  initial: string;
-  color: string;
-  totalTasks: number;
-  completedTasks: number;
-  overdueTasks: number;
-  estimatedHours: number;
-  capacityHours: number;
-  tasksByDay: number[]; // 7 days of task counts
-}
-
-const mockWorkloads: TeamMemberWorkload[] = [
-  {
-    id: "u1", name: "Sarah Chen", initial: "S", color: "bg-purple-100 text-purple-600",
-    totalTasks: 12, completedTasks: 7, overdueTasks: 1, estimatedHours: 32, capacityHours: 40,
-    tasksByDay: [4, 5, 6, 3, 5, 2, 0],
-  },
-  {
-    id: "u2", name: "Alex Kim", initial: "A", color: "bg-blue-100 text-blue-600",
-    totalTasks: 15, completedTasks: 9, overdueTasks: 0, estimatedHours: 38, capacityHours: 40,
-    tasksByDay: [5, 6, 4, 7, 5, 3, 1],
-  },
-  {
-    id: "u3", name: "Jordan Lee", initial: "J", color: "bg-green-100 text-green-600",
-    totalTasks: 18, completedTasks: 10, overdueTasks: 3, estimatedHours: 48, capacityHours: 40,
-    tasksByDay: [7, 8, 6, 9, 7, 4, 2],
-  },
-  {
-    id: "u4", name: "Taylor Swift", initial: "T", color: "bg-orange-100 text-orange-600",
-    totalTasks: 8, completedTasks: 6, overdueTasks: 0, estimatedHours: 20, capacityHours: 40,
-    tasksByDay: [2, 3, 3, 2, 3, 1, 0],
-  },
-  {
-    id: "u5", name: "Demo User", initial: "D", color: "bg-indigo-100 text-indigo-600",
-    totalTasks: 14, completedTasks: 8, overdueTasks: 2, estimatedHours: 35, capacityHours: 40,
-    tasksByDay: [5, 4, 6, 5, 6, 2, 1],
-  },
-];
-
-// -- Helpers ------------------------------------------------------------------
-
-function getLoadStatus(hours: number, capacity: number): { label: string; color: string } {
-  const ratio = hours / capacity;
-  if (ratio > 1) return { label: "Overloaded", color: "text-red-600" };
-  if (ratio > 0.8) return { label: "High", color: "text-orange-600" };
-  if (ratio > 0.5) return { label: "Balanced", color: "text-green-600" };
-  return { label: "Low", color: "text-blue-600" };
-}
-
-function getBarColor(hours: number, capacity: number): string {
-  const ratio = hours / capacity;
-  if (ratio > 1) return "bg-red-500";
-  if (ratio > 0.8) return "bg-orange-500";
-  if (ratio > 0.5) return "bg-green-500";
-  return "bg-blue-400";
-}
-
-const maxDailyTasks = Math.max(...mockWorkloads.flatMap((w) => w.tasksByDay));
+import { useMemo } from "react";
+import { startOfWeek, endOfWeek, addWeeks, format } from "date-fns";
+import { useAppStore } from "@/store/app-store";
+import type { Task, User } from "@/types";
 
 // -- Props --------------------------------------------------------------------
 
@@ -77,151 +11,219 @@ export interface WorkloadViewProps {
   className?: string;
 }
 
+// -- Helpers ------------------------------------------------------------------
+
+function getBarColor(hours: number, capacity: number): string {
+  if (hours <= capacity) return "bg-green-500";
+  if (hours <= capacity * 1.2) return "bg-yellow-400";
+  return "bg-red-500";
+}
+
+function rangesOverlap(
+  aStart: Date,
+  aEnd: Date,
+  bStart: Date,
+  bEnd: Date,
+): boolean {
+  return aStart <= bEnd && bStart <= aEnd;
+}
+
+function taskRangeForWeek(
+  task: Task,
+  weekStart: Date,
+  weekEnd: Date,
+): boolean {
+  // Determine a [start, end] window for the task
+  const dueRaw = task.dueDate;
+  const startRaw = task.startDate;
+  if (!dueRaw && !startRaw) return false;
+  const start = startRaw ? new Date(startRaw) : new Date(dueRaw as string);
+  const end = dueRaw ? new Date(dueRaw as string) : new Date(startRaw as string);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return false;
+  // Normalize if reversed
+  const s = start <= end ? start : end;
+  const e = start <= end ? end : start;
+  return rangesOverlap(s, e, weekStart, weekEnd);
+}
+
+function getEffortHours(task: Task): number {
+  const v = (task as unknown as { effortHours?: unknown }).effortHours;
+  if (typeof v === "number" && !isNaN(v)) return v;
+  return 1;
+}
+
+function getCapacity(user: User): number {
+  const v = (user as unknown as { weeklyCapacityHours?: unknown })
+    .weeklyCapacityHours;
+  if (typeof v === "number" && v > 0) return v;
+  return 40;
+}
+
+function isGuest(user: User): boolean {
+  const role = (user as unknown as { role?: unknown }).role;
+  const guest = (user as unknown as { isGuest?: unknown }).isGuest;
+  return role === "guest" || guest === true;
+}
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 // -- Component ----------------------------------------------------------------
 
 export function WorkloadView({ className }: WorkloadViewProps) {
-  const [weekOffset, setWeekOffset] = useState(0);
+  const users = useAppStore((s) => s.users);
+  const tasks = useAppStore((s) => s.tasks);
 
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() + weekOffset * 7 - startDate.getDay() + 1);
+  const weeks = useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: 4 }, (_, i) => {
+      const start = startOfWeek(addWeeks(now, i), { weekStartsOn: 1 });
+      const end = endOfWeek(addWeeks(now, i), { weekStartsOn: 1 });
+      return {
+        start,
+        end,
+        // Format like "Wk 15 Apr 7"
+        label: `Wk ${format(start, "I")} ${format(start, "MMM d")}`,
+      };
+    });
+  }, []);
 
-  const dayLabels = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(startDate);
-    d.setDate(d.getDate() + i);
-    return {
-      short: d.toLocaleDateString("en-US", { weekday: "short" }),
-      date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    };
-  });
+  const activeUsers = useMemo(
+    () => users.filter((u) => !isGuest(u)),
+    [users],
+  );
 
-  const weekLabel = `${dayLabels[0].date} - ${dayLabels[6].date}`;
+  // Build a map: userId -> week index -> hours
+  const loads = useMemo(() => {
+    const map = new Map<string, number[]>();
+    for (const user of activeUsers) {
+      const perWeek = weeks.map(({ start, end }) => {
+        let sum = 0;
+        for (const task of tasks) {
+          if (task.assigneeId !== user.id) continue;
+          if (task.completed) continue;
+          if (!taskRangeForWeek(task, start, end)) continue;
+          sum += getEffortHours(task);
+        }
+        return sum;
+      });
+      map.set(user.id, perWeek);
+    }
+    return map;
+  }, [activeUsers, tasks, weeks]);
 
   return (
     <div className={className}>
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">Team Workload</h2>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setWeekOffset((p) => p - 1)}
-            className="rounded-lg border border-gray-200 bg-white p-1.5 text-gray-500 hover:bg-gray-50"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <span className="min-w-[160px] text-center text-sm font-medium text-gray-700">
-            {weekLabel}
-          </span>
-          <button
-            onClick={() => setWeekOffset((p) => p + 1)}
-            className="rounded-lg border border-gray-200 bg-white p-1.5 text-gray-500 hover:bg-gray-50"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setWeekOffset(0)}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
-          >
-            This week
-          </button>
-        </div>
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          Team Workload
+        </h2>
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          Effort hours per user over the next 4 weeks
+        </p>
       </div>
 
-      {/* Capacity bars */}
-      <div className="mb-8 space-y-4">
-        {mockWorkloads.map((person) => {
-          const loadStatus = getLoadStatus(person.estimatedHours, person.capacityHours);
-          const barColor = getBarColor(person.estimatedHours, person.capacityHours);
-          const fillPercent = Math.min((person.estimatedHours / person.capacityHours) * 100, 120);
-
-          return (
-            <div key={person.id} className="flex items-center gap-4">
-              {/* Person info */}
-              <div className="flex w-40 shrink-0 items-center gap-2">
-                <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${person.color}`}>
-                  {person.initial}
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-gray-900">{person.name}</p>
-                  <p className={`text-[10px] font-medium ${loadStatus.color}`}>{loadStatus.label}</p>
-                </div>
-              </div>
-
-              {/* Bar */}
-              <div className="flex min-w-0 flex-1 items-center gap-3">
-                <div className="relative h-6 flex-1 overflow-hidden rounded-full bg-gray-100">
-                  <div
-                    className={`h-full rounded-full transition-all ${barColor}`}
-                    style={{ width: `${Math.min(fillPercent, 100)}%` }}
-                  />
-                  {/* Capacity line */}
-                  <div className="absolute right-0 top-0 h-full w-px bg-gray-300" />
-                  {fillPercent > 100 && (
-                    <div
-                      className="absolute top-0 h-full rounded-r-full bg-red-200"
-                      style={{ left: "100%", width: `${fillPercent - 100}%` }}
-                    />
-                  )}
-                </div>
-                <span className="w-24 shrink-0 text-right text-xs text-gray-500">
-                  {person.estimatedHours}h / {person.capacityHours}h
-                </span>
-              </div>
-
-              {/* Stats */}
-              <div className="flex w-28 shrink-0 items-center gap-2 text-xs">
-                <span className="flex items-center gap-0.5 text-green-600">
-                  <CheckCircle2 className="h-3 w-3" /> {person.completedTasks}
-                </span>
-                {person.overdueTasks > 0 && (
-                  <span className="flex items-center gap-0.5 text-red-600">
-                    <AlertTriangle className="h-3 w-3" /> {person.overdueTasks}
-                  </span>
-                )}
-                <span className="text-gray-400">{person.totalTasks} total</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Daily breakdown chart */}
-      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h3 className="mb-4 text-sm font-semibold text-gray-900">Daily Task Distribution</h3>
-
-        <div className="flex items-end gap-2">
-          {dayLabels.map((day, dayIdx) => (
-            <div key={day.short} className="flex flex-1 flex-col items-center gap-1">
-              <div className="flex w-full items-end justify-center gap-px" style={{ height: 120 }}>
-                {mockWorkloads.map((person) => {
-                  const val = person.tasksByDay[dayIdx] || 0;
-                  const height = maxDailyTasks > 0 ? (val / maxDailyTasks) * 100 : 0;
-                  return (
-                    <div
-                      key={person.id}
-                      className={`w-3 rounded-t transition-all ${person.color.split(" ")[0].replace("text-", "bg-").replace("-100", "-400")}`}
-                      style={{ height: `${height}%`, minHeight: val > 0 ? 4 : 0 }}
-                      title={`${person.name}: ${val} tasks`}
-                    />
-                  );
-                })}
-              </div>
-              <div className="text-center">
-                <p className="text-[10px] font-medium text-gray-600">{day.short}</p>
-                <p className="text-[9px] text-gray-400">{day.date}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Legend */}
-        <div className="mt-4 flex flex-wrap gap-3">
-          {mockWorkloads.map((person) => (
-            <span key={person.id} className="flex items-center gap-1.5 text-[10px] text-gray-500">
-              <span className={`h-2 w-2 rounded-full ${person.color.split(" ")[0].replace("text-", "bg-").replace("-100", "-400")}`} />
-              {person.name}
-            </span>
-          ))}
-        </div>
+      {/* Table */}
+      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <table className="w-full min-w-[720px] border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-900/60">
+              <th className="sticky left-0 z-10 bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600 dark:bg-gray-900/60 dark:text-gray-300">
+                Member
+              </th>
+              {weeks.map((w, i) => (
+                <th
+                  key={i}
+                  className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300"
+                >
+                  {w.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {activeUsers.length === 0 && (
+              <tr>
+                <td
+                  colSpan={weeks.length + 1}
+                  className="px-4 py-6 text-center text-sm text-gray-400"
+                >
+                  No team members yet.
+                </td>
+              </tr>
+            )}
+            {activeUsers.map((user) => {
+              const capacity = getCapacity(user);
+              const perWeek = loads.get(user.id) ?? [];
+              const thisWeekHours = perWeek[0] ?? 0;
+              return (
+                <tr
+                  key={user.id}
+                  className="border-b border-gray-100 last:border-0 dark:border-gray-800"
+                >
+                  <td className="sticky left-0 z-10 bg-white px-4 py-3 align-middle dark:bg-gray-900">
+                    <div className="flex items-center gap-3">
+                      {user.avatar ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={user.avatar as string}
+                          alt={user.name}
+                          className="h-8 w-8 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300">
+                          {getInitials(user.name)}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {user.name}
+                        </p>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                          {thisWeekHours} of {capacity} hours
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  {perWeek.map((hours, i) => {
+                    if (hours === 0) {
+                      return (
+                        <td
+                          key={i}
+                          className="px-4 py-3 align-middle text-xs text-gray-400"
+                        >
+                          — Free
+                        </td>
+                      );
+                    }
+                    const color = getBarColor(hours, capacity);
+                    const pct = Math.min((hours / capacity) * 100, 100);
+                    return (
+                      <td key={i} className="px-4 py-3 align-middle">
+                        <div className="flex items-center gap-2">
+                          <span className="w-10 shrink-0 text-xs font-medium text-gray-700 dark:text-gray-200">
+                            {hours}h
+                          </span>
+                          <div className="relative h-2 flex-1 min-w-[60px] overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+                            <div
+                              className={`h-full rounded-full transition-all ${color}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );

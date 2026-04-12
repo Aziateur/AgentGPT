@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -20,95 +20,19 @@ import {
 import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useAppStore } from "@/store/app-store";
 import { BoardColumn } from "./board-column";
 import { BoardCard } from "./board-card";
-import type { Section, Task, Tag, User } from "@/types";
-
-// ---------------------------------------------------------------------------
-// Mock data for visual representation
-// ---------------------------------------------------------------------------
-
-const MOCK_USERS: Record<string, User> = {
-  u1: { id: "u1", name: "Alice Chen", email: "alice@example.com", avatar: null },
-  u2: { id: "u2", name: "Bob Park", email: "bob@example.com", avatar: null },
-  u3: { id: "u3", name: "Carol Smith", email: "carol@example.com", avatar: null },
-};
-
-const MOCK_TAGS: Record<string, Tag> = {
-  tg1: { id: "tg1", name: "Design", color: "#8B5CF6" },
-  tg2: { id: "tg2", name: "Engineering", color: "#3B82F6" },
-  tg3: { id: "tg3", name: "Bug", color: "#EF4444" },
-  tg4: { id: "tg4", name: "Feature", color: "#10B981" },
-};
-
-function makeTask(overrides: Partial<Task> & { id: string; title: string; sectionId: string }): Task {
-  return {
-    description: null,
-    htmlDescription: null,
-    status: "not_started",
-    priority: "none",
-    taskType: "task",
-    completed: false,
-    isTemplate: false,
-    completedAt: null,
-    assigneeId: null,
-    creatorId: "u1",
-    projectId: "p1",
-    parentTaskId: null,
-    position: 0,
-    dueDate: null,
-    startDate: null,
-    estimatedMinutes: null,
-    actualMinutes: null,
-    tagIds: [],
-    followerIds: [],
-    subtaskIds: [],
-    dependencyIds: [],
-    approvalStatus: null,
-    approverIds: [],
-    likes: [],
-    attachmentCount: 0,
-    commentCount: 0,
-    customFieldValues: [],
-    createdAt: "",
-    updatedAt: "",
-    ...overrides,
-  };
-}
-
-const MOCK_SECTIONS: Section[] = [
-  { id: "s1", name: "To Do", projectId: "p1", position: 0, taskIds: ["t1", "t2", "t3"], createdAt: "" },
-  { id: "s2", name: "In Progress", projectId: "p1", position: 1, taskIds: ["t4", "t5"], createdAt: "" },
-  { id: "s3", name: "In Review", projectId: "p1", position: 2, taskIds: ["t6"], createdAt: "" },
-  { id: "s4", name: "Done", projectId: "p1", position: 3, taskIds: ["t7", "t8"], createdAt: "" },
-];
-
-const MOCK_TASKS: Task[] = [
-  makeTask({ id: "t1", title: "Design new landing page", sectionId: "s1", priority: "high", assigneeId: "u1", dueDate: "2026-04-10", tagIds: ["tg1"], subtaskIds: ["st1", "st2"], position: 0 } as any),
-  makeTask({ id: "t2", title: "Set up CI/CD pipeline", sectionId: "s1", priority: "medium", assigneeId: "u2", tagIds: ["tg2"], position: 1 } as any),
-  makeTask({ id: "t3", title: "Write API documentation", sectionId: "s1", priority: "low", dueDate: "2026-04-15", tagIds: ["tg2"], position: 2 } as any),
-  makeTask({ id: "t4", title: "Implement auth flow", sectionId: "s2", priority: "high", assigneeId: "u2", dueDate: "2026-04-05", tagIds: ["tg2", "tg4"], subtaskIds: ["st3"], position: 0 } as any),
-  makeTask({ id: "t5", title: "Create onboarding screens", sectionId: "s2", priority: "medium", assigneeId: "u1", dueDate: "2026-04-08", tagIds: ["tg1"], position: 1 } as any),
-  makeTask({ id: "t6", title: "Fix navigation bug", sectionId: "s3", priority: "high", assigneeId: "u3", tagIds: ["tg3"], position: 0 } as any),
-  makeTask({ id: "t7", title: "Database schema v2", sectionId: "s4", priority: "none", assigneeId: "u2", completed: true, completedAt: "2026-03-28", position: 0 } as any),
-  makeTask({ id: "t8", title: "Project kickoff meeting", sectionId: "s4", priority: "none", taskType: "milestone", completed: true, completedAt: "2026-03-20", position: 1 } as any),
-];
+import type { Task, User, Tag } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 
 export interface BoardViewProps {
-  sections?: Section[];
-  tasks?: Task[];
-  users?: Record<string, User>;
-  tags?: Record<string, Tag>;
+  projectId: string;
   onTaskClick?: (taskId: string) => void;
   onAddTask?: (sectionId: string) => void;
-  onAddSection?: () => void;
-  onRenameSection?: (sectionId: string, name: string) => void;
-  onDeleteSection?: (sectionId: string) => void;
-  onTaskMove?: (taskId: string, fromSectionId: string, toSectionId: string, newIndex: number) => void;
   className?: string;
 }
 
@@ -117,28 +41,63 @@ export interface BoardViewProps {
 // ---------------------------------------------------------------------------
 
 export function BoardView({
-  sections: sectionsProp,
-  tasks: tasksProp,
-  users = MOCK_USERS,
-  tags = MOCK_TAGS,
+  projectId,
   onTaskClick,
   onAddTask,
-  onAddSection,
-  onRenameSection,
-  onDeleteSection,
-  onTaskMove,
   className,
 }: BoardViewProps) {
-  const [sections, setSections] = useState<Section[]>(sectionsProp ?? MOCK_SECTIONS);
-  const [tasks, setTasks] = useState<Task[]>(tasksProp ?? MOCK_TASKS);
-  const [activeTask, setActiveTask] = useState<Task | null>(null);
+  // -- Store selectors ------------------------------------------------------
+  const sections = useAppStore((s) => s.getProjectSections(projectId));
+  const tasks = useAppStore((s) => s.getProjectTasks(projectId));
+  const storeUsers = useAppStore((s) => s.users);
+  const storeTags = useAppStore((s) => s.tags);
+  const storeTaskTags = useAppStore((s) => s.taskTags);
 
-  // Group tasks by section
-  const tasksBySection = React.useMemo(() => {
-    const map: Record<string, Task[]> = {};
-    for (const sec of sections) {
-      map[sec.id] = [];
+  const updateTask = useAppStore((s) => s.updateTask);
+  const createSection = useAppStore((s) => s.createSection);
+  const createTask = useAppStore((s) => s.createTask);
+  const updateSection = useAppStore((s) => s.updateSection);
+  const deleteSection = useAppStore((s) => s.deleteSection);
+
+  // -- Local state ----------------------------------------------------------
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+
+  // -- Derived maps ---------------------------------------------------------
+  const sortedSections = useMemo(
+    () => [...sections].sort((a, b) => a.position - b.position),
+    [sections]
+  );
+
+  const usersById = useMemo<Record<string, User>>(() => {
+    const map: Record<string, User> = {};
+    for (const u of storeUsers) map[u.id] = u;
+    return map;
+  }, [storeUsers]);
+
+  const tagsById = useMemo<Record<string, Tag>>(() => {
+    const map: Record<string, Tag> = {};
+    for (const t of storeTags) {
+      map[t.id] = { id: t.id, name: t.name, color: t.color };
     }
+    return map;
+  }, [storeTags]);
+
+  // taskId -> Tag[] (filtered via taskTags join table)
+  const tagsByTaskId = useMemo<Record<string, Tag[]>>(() => {
+    const map: Record<string, Tag[]> = {};
+    for (const link of storeTaskTags) {
+      const tag = tagsById[link.tagId];
+      if (!tag) continue;
+      (map[link.taskId] ||= []).push(tag);
+    }
+    return map;
+  }, [storeTaskTags, tagsById]);
+
+  // Group tasks by section (sorted by position)
+  const tasksBySection = useMemo(() => {
+    const map: Record<string, Task[]> = {};
+    for (const sec of sortedSections) map[sec.id] = [];
     for (const task of tasks) {
       if (task.sectionId && map[task.sectionId]) {
         map[task.sectionId].push(task);
@@ -148,9 +107,9 @@ export function BoardView({
       map[key].sort((a, b) => a.position - b.position);
     }
     return map;
-  }, [sections, tasks]);
+  }, [sortedSections, tasks]);
 
-  // DnD sensors
+  // -- DnD ------------------------------------------------------------------
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
@@ -163,6 +122,7 @@ export function BoardView({
     [tasks]
   );
 
+  // Move task between columns on the fly (persists on drop)
   const handleDragOver = useCallback(
     (event: DragOverEvent) => {
       const { active, over } = event;
@@ -175,7 +135,7 @@ export function BoardView({
       if (!draggedTask) return;
 
       let destinationSectionId: string | null = null;
-      const overSection = sections.find((s) => s.id === overId);
+      const overSection = sortedSections.find((s) => s.id === overId);
       if (overSection) {
         destinationSectionId = overSection.id;
       } else {
@@ -183,15 +143,15 @@ export function BoardView({
         if (overTask) destinationSectionId = overTask.sectionId || null;
       }
 
-      if (destinationSectionId && draggedTask.sectionId !== destinationSectionId) {
-        setTasks((prev) =>
-          prev.map((t) =>
-            t.id === activeId ? ({ ...t, sectionId: destinationSectionId || null } as any) : t
-          )
-        );
+      if (
+        destinationSectionId &&
+        draggedTask.sectionId !== destinationSectionId
+      ) {
+        // Optimistic visual move — drop handler will persist final pos
+        updateTask(activeId, { sectionId: destinationSectionId });
       }
     },
-    [tasks, sections]
+    [tasks, sortedSections, updateTask]
   );
 
   const handleDragEnd = useCallback(
@@ -203,45 +163,90 @@ export function BoardView({
       const activeId = active.id as string;
       const overId = over.id as string;
 
-      if (activeId === overId) return;
-
-      setTasks((prev) => {
-        const movedTask = prev.find((t) => t.id === activeId);
-        if (!movedTask || !movedTask.sectionId) return prev;
-
-        const sectionTasks = prev
-          .filter((t) => t.sectionId === movedTask.sectionId)
-          .sort((a, b) => a.position - b.position);
-
-        const oldIndex = sectionTasks.findIndex((t) => t.id === activeId);
-        const newIndex = sectionTasks.findIndex((t) => t.id === overId);
-
-        if (oldIndex === -1 || newIndex === -1) return prev;
-
-        const reordered = arrayMove(sectionTasks, oldIndex, newIndex);
-        const reorderedIds = new Set(reordered.map((t) => t.id));
-
-        return prev.map((t) => {
-          if (reorderedIds.has(t.id)) {
-            const idx = reordered.findIndex((r) => r.id === t.id);
-            return { ...t, position: idx };
-          }
-          return t;
-        });
-      });
-
       const movedTask = tasks.find((t) => t.id === activeId);
-      if (movedTask && onTaskMove) {
+      if (!movedTask) return;
+
+      // Determine destination section
+      let toSectionId: string | null = null;
+      const overSection = sortedSections.find((s) => s.id === overId);
+      if (overSection) {
+        toSectionId = overSection.id;
+      } else {
         const overTask = tasks.find((t) => t.id === overId);
-        const toSection = overTask?.sectionId ?? overId;
-        const sectionTasks = tasks.filter((t) => t.sectionId === toSection);
-        const newIdx = sectionTasks.findIndex((t) => t.id === overId);
-        onTaskMove(activeId, movedTask.sectionId ?? "", toSection, Math.max(newIdx, 0));
+        toSectionId = overTask?.sectionId ?? movedTask.sectionId ?? null;
       }
+      if (!toSectionId) return;
+
+      // Compute new position within destination section
+      const destTasks = tasks
+        .filter((t) => t.sectionId === toSectionId && t.id !== activeId)
+        .sort((a, b) => a.position - b.position);
+
+      let newIndex = destTasks.length;
+      const overTask = tasks.find((t) => t.id === overId);
+      if (overTask && overTask.sectionId === toSectionId) {
+        newIndex = destTasks.findIndex((t) => t.id === overId);
+        if (newIndex < 0) newIndex = destTasks.length;
+      }
+
+      // Reorder the destination list with the moved task inserted at newIndex
+      const reordered = [...destTasks];
+      reordered.splice(newIndex, 0, { ...movedTask, sectionId: toSectionId });
+
+      // Persist updated positions (and sectionId for moved task)
+      reordered.forEach((t, idx) => {
+        if (t.id === activeId) {
+          updateTask(t.id, { sectionId: toSectionId, position: idx });
+        } else if (t.position !== idx) {
+          updateTask(t.id, { position: idx });
+        }
+      });
     },
-    [tasks, onTaskMove]
+    [tasks, sortedSections, updateTask]
   );
 
+  // -- Section handlers -----------------------------------------------------
+  const handleAddSection = useCallback(async () => {
+    const name = typeof window !== "undefined" ? window.prompt("Section name:") : null;
+    if (!name?.trim()) return;
+    await createSection({ name: name.trim(), projectId });
+  }, [createSection, projectId]);
+
+  const handleRenameSection = useCallback(
+    (sectionId: string, name: string) => {
+      updateSection(sectionId, name);
+    },
+    [updateSection]
+  );
+
+  const handleDeleteSection = useCallback(
+    (sectionId: string) => {
+      deleteSection(sectionId);
+    },
+    [deleteSection]
+  );
+
+  const defaultOnAddTask = useCallback(
+    async (sectionId: string) => {
+      const title =
+        typeof window !== "undefined" ? window.prompt("Task name:") : null;
+      if (!title?.trim()) return;
+      await createTask({
+        title: title.trim(),
+        projectId,
+        sectionId,
+      });
+    },
+    [createTask, projectId]
+  );
+
+  const addTaskHandler = onAddTask ?? defaultOnAddTask;
+
+  const toggleCollapsed = useCallback((sectionId: string) => {
+    setCollapsed((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }));
+  }, []);
+
+  // -- Render ---------------------------------------------------------------
   return (
     <DndContext
       sensors={sensors}
@@ -252,22 +257,64 @@ export function BoardView({
     >
       <div className={cn("flex h-full gap-4 overflow-x-auto p-4 pb-6", className)}>
         <SortableContext
-          items={sections.map((s) => s.id)}
+          items={sortedSections.map((s) => s.id)}
           strategy={horizontalListSortingStrategy}
         >
-          {sections.map((section) => (
-            <BoardColumn
-              key={section.id}
-              section={section}
-              tasks={tasksBySection[section.id] ?? []}
-              users={users}
-              tags={tags}
-              onAddTask={onAddTask}
-              onTaskClick={onTaskClick}
-              onRenameSection={onRenameSection}
-              onDeleteSection={onDeleteSection}
-            />
-          ))}
+          {sortedSections.map((section) => {
+            const colTasks = tasksBySection[section.id] ?? [];
+            const wipLimit = (section as any).wipLimit as number | undefined;
+            const overLimit =
+              typeof wipLimit === "number" && wipLimit > 0 && colTasks.length > wipLimit;
+            const isCollapsed = !!collapsed[section.id];
+
+            return (
+              <div key={section.id} className="flex flex-col">
+                {overLimit && (
+                  <div className="mb-1 w-72 rounded-md bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-600">
+                    Over WIP limit ({colTasks.length}/{wipLimit})
+                  </div>
+                )}
+                {isCollapsed ? (
+                  <button
+                    onClick={() => toggleCollapsed(section.id)}
+                    className={cn(
+                      "flex w-12 h-40 flex-shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-xs font-medium text-gray-600 hover:bg-gray-100",
+                      overLimit && "border-red-300 text-red-600"
+                    )}
+                    title={`${section.name} (${colTasks.length})`}
+                  >
+                    <span className="[writing-mode:vertical-rl] rotate-180">
+                      {section.name} · {colTasks.length}
+                    </span>
+                  </button>
+                ) : (
+                  <div className="relative">
+                    <BoardColumn
+                      section={section}
+                      tasks={colTasks}
+                      users={usersById}
+                      tags={tagsById}
+                      onAddTask={addTaskHandler}
+                      onTaskClick={onTaskClick}
+                      onRenameSection={handleRenameSection}
+                      onDeleteSection={handleDeleteSection}
+                      className={overLimit ? "ring-1 ring-red-400" : undefined}
+                    />
+                    {overLimit && (
+                      <div className="pointer-events-none absolute inset-x-3 top-2 h-[2px] rounded bg-red-500/70" />
+                    )}
+                    <button
+                      onClick={() => toggleCollapsed(section.id)}
+                      className="absolute right-10 top-2 z-10 rounded px-1 text-[11px] text-gray-400 hover:text-gray-700"
+                      title="Collapse column"
+                    >
+                      {"<<"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </SortableContext>
 
         {/* Add section column */}
@@ -275,7 +322,7 @@ export function BoardView({
           <Button
             variant="ghost"
             className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-8 text-gray-400 hover:border-gray-300 hover:text-gray-600 hover:bg-gray-50"
-            onClick={onAddSection}
+            onClick={handleAddSection}
           >
             <Plus className="h-5 w-5" />
             Add section
@@ -289,8 +336,10 @@ export function BoardView({
           <div className="rotate-2 opacity-90">
             <BoardCard
               task={activeTask}
-              assignee={activeTask.assigneeId ? users[activeTask.assigneeId] : null}
-              tags={((activeTask as any).tagIds || []).map((id: string) => tags[id]).filter(Boolean)}
+              assignee={
+                activeTask.assigneeId ? usersById[activeTask.assigneeId] : null
+              }
+              tags={tagsByTaskId[activeTask.id] ?? []}
             />
           </div>
         ) : null}
