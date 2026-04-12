@@ -6,7 +6,39 @@ import {
   mockSections,
   mockTasks,
 } from "@/lib/mock-data";
-import type { User, Project, Section, Task, Notification, Goal, Portfolio } from "@/types";
+import type {
+  User,
+  Project,
+  Section,
+  Task,
+  Notification,
+  Goal,
+  Portfolio,
+  TagExt,
+  TaskDependencyEdge,
+  CustomFieldDefExt,
+  CustomFieldValueExt,
+  AttachmentFile,
+  NotificationItem,
+  AutomationRuleExt,
+  RuleExecutionExt,
+  FormExt,
+  FormFieldExt,
+  FormSubmissionExt,
+  GoalExt,
+  PortfolioExt,
+  TeamExt,
+  TeamMemberExt,
+  ProjectMemberExt,
+  TimeEntry,
+  SavedView,
+  SavedSearch,
+  Dashboard,
+  DashboardWidget,
+  ProjectStatusUpdateExt,
+  TaskProjectLink,
+  MyTaskSection,
+} from "@/types";
 
 // ---------------------------------------------------------------------------
 // snake_case <-> camelCase mappers
@@ -115,6 +147,266 @@ function dbToUser(r: Record<string, unknown>): User {
   };
 }
 
+// ---------- Extended schema mappers ----------
+
+function dbToTag(r: any): TagExt {
+  return {
+    id: r.id,
+    name: r.name,
+    color: r.color ?? "#4c6ef5",
+    createdAt: r.created_at,
+  };
+}
+
+function dbToDep(r: any): TaskDependencyEdge {
+  return {
+    id: r.id,
+    blockerTaskId: r.blocker_task_id,
+    blockedTaskId: r.blocked_task_id,
+    depType: (r.dep_type ?? "finish_to_start"),
+    createdAt: r.created_at,
+  };
+}
+
+function dbToCustomFieldDef(r: any): CustomFieldDefExt {
+  return {
+    id: r.id,
+    projectId: r.project_id ?? null,
+    name: r.name,
+    fieldType: r.field_type,
+    options: r.options ?? null,
+    required: !!r.required,
+    position: r.position ?? 0,
+    createdAt: r.created_at,
+  };
+}
+
+function dbToCustomFieldValue(r: any): CustomFieldValueExt {
+  return {
+    id: r.id,
+    taskId: r.task_id,
+    fieldId: r.field_id,
+    valueText: r.value_text ?? null,
+    valueNumber: r.value_number ?? null,
+    valueDate: r.value_date ?? null,
+    valueUserId: r.value_user_id ?? null,
+    valueSelectIds: r.value_select_ids ?? null,
+    valueBool: r.value_bool ?? null,
+    updatedAt: r.updated_at,
+  };
+}
+
+function dbToAttachment(r: any): AttachmentFile {
+  return {
+    id: r.id,
+    taskId: r.task_id ?? null,
+    projectId: r.project_id ?? null,
+    uploaderId: r.uploader_id ?? null,
+    filename: r.filename,
+    mimeType: r.mime_type ?? null,
+    sizeBytes: r.size_bytes ?? null,
+    storagePath: r.storage_path,
+    publicUrl: r.public_url ?? null,
+    createdAt: r.created_at,
+  };
+}
+
+function dbToNotification(r: any): NotificationItem {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    actorId: r.actor_id ?? null,
+    type: r.type,
+    taskId: r.task_id ?? null,
+    projectId: r.project_id ?? null,
+    title: r.title,
+    message: r.message ?? null,
+    linkUrl: r.link_url ?? null,
+    read: !!r.read,
+    archived: !!r.archived,
+    snoozedUntil: r.snoozed_until ?? null,
+    createdAt: r.created_at,
+  };
+}
+
+function dbToRule(r: any): AutomationRuleExt {
+  return {
+    id: r.id,
+    projectId: r.project_id ?? null,
+    name: r.name,
+    enabled: !!r.enabled,
+    triggerType: r.trigger_type,
+    triggerConfig: r.trigger_config ?? {},
+    actions: Array.isArray(r.actions) ? r.actions : [],
+    scope: (r.scope ?? "project"),
+    userId: r.user_id ?? null,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+function dbToRuleExec(r: any): RuleExecutionExt {
+  return {
+    id: r.id,
+    ruleId: r.rule_id,
+    taskId: r.task_id ?? null,
+    status: r.status,
+    log: r.log ?? null,
+    executedAt: r.executed_at,
+  };
+}
+
+function dbToForm(r: any): FormExt {
+  return {
+    id: r.id,
+    projectId: r.project_id ?? null,
+    title: r.title,
+    description: r.description ?? null,
+    publicSlug: r.public_slug ?? null,
+    settings: r.settings ?? {},
+    enabled: !!r.enabled,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+function dbToFormField(r: any): FormFieldExt {
+  return {
+    id: r.id,
+    formId: r.form_id,
+    label: r.label,
+    fieldType: r.field_type,
+    options: r.options ?? null,
+    required: !!r.required,
+    position: r.position ?? 0,
+  };
+}
+
+function dbToFormSubmission(r: any): FormSubmissionExt {
+  return {
+    id: r.id,
+    formId: r.form_id,
+    taskId: r.task_id ?? null,
+    payload: r.payload ?? {},
+    submittedAt: r.submitted_at,
+  };
+}
+
+function dbToGoal(r: any): GoalExt {
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description ?? null,
+    ownerId: r.owner_id ?? null,
+    parentId: r.parent_id ?? null,
+    timePeriod: r.time_period ?? null,
+    startDate: r.start_date ?? null,
+    endDate: r.end_date ?? null,
+    metricType: r.metric_type ?? "percentage",
+    metricTarget: r.metric_target ?? null,
+    metricCurrent: r.metric_current ?? 0,
+    status: r.status ?? "on_track",
+    weight: r.weight ?? 1,
+    progress: r.progress ?? 0,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+function dbToPortfolio(r: any): PortfolioExt {
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description ?? null,
+    color: r.color ?? "#4c6ef5",
+    ownerId: r.owner_id ?? null,
+    parentId: r.parent_id ?? null,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+function dbToTeam(r: any): TeamExt {
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description ?? null,
+    ownerId: r.owner_id ?? null,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+function dbToStatusUpdate(r: any): ProjectStatusUpdateExt {
+  return {
+    id: r.id,
+    projectId: r.project_id,
+    authorId: r.author_id ?? null,
+    status: r.status,
+    text: r.text ?? null,
+    createdAt: r.created_at,
+  };
+}
+
+function dbToTimeEntry(r: any): TimeEntry {
+  return {
+    id: r.id,
+    taskId: r.task_id,
+    userId: r.user_id,
+    startedAt: r.started_at,
+    endedAt: r.ended_at ?? null,
+    durationMinutes: r.duration_minutes ?? null,
+    note: r.note ?? null,
+    createdAt: r.created_at,
+  };
+}
+
+function dbToSavedView(r: any): SavedView {
+  return {
+    id: r.id,
+    projectId: r.project_id ?? null,
+    userId: r.user_id ?? null,
+    name: r.name,
+    viewType: r.view_type,
+    filters: Array.isArray(r.filters) ? r.filters : [],
+    sort: Array.isArray(r.sort) ? r.sort : [],
+    groupBy: r.group_by ?? null,
+    createdAt: r.created_at,
+  };
+}
+
+function dbToSavedSearch(r: any): SavedSearch {
+  return {
+    id: r.id,
+    name: r.name,
+    query: r.query ?? "",
+    filters: JSON.stringify(r.filters ?? []),
+    userId: r.user_id,
+    createdAt: r.created_at,
+  };
+}
+
+function dbToDashboard(r: any): Dashboard {
+  return {
+    id: r.id,
+    ownerId: r.owner_id ?? null,
+    scopeId: r.scope_id ?? null,
+    name: r.name,
+    createdAt: r.created_at,
+  };
+}
+
+function dbToWidget(r: any): DashboardWidget {
+  return {
+    id: r.id,
+    dashboardId: r.dashboard_id,
+    type: r.type,
+    config: r.config ?? {},
+    position: r.position ?? { x: 0, y: 0, w: 6, h: 4 },
+    createdAt: r.created_at,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Store types
 // ---------------------------------------------------------------------------
@@ -129,9 +421,37 @@ interface AppState {
   tasks: Task[];
   notifications: Notification[];
   currentUser: User;
-  
+
   localGoals: any[];        // Using any here temporarily to avoid complex Goal imports for now
   localPortfolios: any[];   // Using any to store the UI portfolios
+
+  // Extended schema data (fetched per-table with graceful fallback)
+  tags: TagExt[];
+  taskTags: { taskId: string; tagId: string }[];
+  taskDeps: TaskDependencyEdge[];
+  taskProjects: TaskProjectLink[];
+  customFieldDefs: CustomFieldDefExt[];
+  customFieldValues: CustomFieldValueExt[];
+  attachments: AttachmentFile[];
+  notificationsExt: NotificationItem[];
+  rules: AutomationRuleExt[];
+  ruleExecutions: RuleExecutionExt[];
+  forms: FormExt[];
+  formFields: FormFieldExt[];
+  formSubmissions: FormSubmissionExt[];
+  goalsExt: GoalExt[];
+  portfoliosExt: PortfolioExt[];
+  portfolioProjects: { portfolioId: string; projectId: string; position: number }[];
+  teams: TeamExt[];
+  teamMembers: TeamMemberExt[];
+  projectMembers: ProjectMemberExt[];
+  projectStatusUpdates: ProjectStatusUpdateExt[];
+  timeEntries: TimeEntry[];
+  savedViews: SavedView[];
+  savedSearches: SavedSearch[];
+  dashboards: Dashboard[];
+  dashboardWidgets: DashboardWidget[];
+  myTaskSections: MyTaskSection[];
 
   // State flags
   initialized: boolean;
@@ -192,6 +512,34 @@ export const useAppStore = create<AppState>()(
       currentUser: EMPTY_USER,
       localGoals: [],
       localPortfolios: [],
+
+      tags: [],
+      taskTags: [],
+      taskDeps: [],
+      taskProjects: [],
+      customFieldDefs: [],
+      customFieldValues: [],
+      attachments: [],
+      notificationsExt: [],
+      rules: [],
+      ruleExecutions: [],
+      forms: [],
+      formFields: [],
+      formSubmissions: [],
+      goalsExt: [],
+      portfoliosExt: [],
+      portfolioProjects: [],
+      teams: [],
+      teamMembers: [],
+      projectMembers: [],
+      projectStatusUpdates: [],
+      timeEntries: [],
+      savedViews: [],
+      savedSearches: [],
+      dashboards: [],
+      dashboardWidgets: [],
+      myTaskSections: [],
+
       initialized: false,
       loading: false,
       error: null,
@@ -232,6 +580,50 @@ export const useAppStore = create<AppState>()(
         if (found) nextUser = found;
       }
 
+      // Fetch extended tables in parallel. Each is wrapped so that a missing
+      // table (migration not yet applied) does not break the app.
+      const safe = async <T,>(fn: () => Promise<T[]>): Promise<T[]> => {
+        try { return await fn(); } catch { return []; }
+      };
+      const [
+        tagsD, taskTagsD, depsD, taskProjectsD,
+        cfdD, cfvD, attachD, notifD,
+        rulesD, ruleExecD,
+        formsD, formFieldsD, formSubD,
+        goalsD, portD, portProjD,
+        teamsD, teamMembD, projMembD,
+        psuD, timeD,
+        savedViewsD, savedSearchD,
+        dashD, widgetD, myTaskSecD,
+      ] = await Promise.all([
+        safe(async () => ((await supabase.from("tags").select("*")).data || [])),
+        safe(async () => ((await supabase.from("task_tags").select("*")).data || [])),
+        safe(async () => ((await supabase.from("task_dependencies").select("*")).data || [])),
+        safe(async () => ((await supabase.from("task_projects").select("*")).data || [])),
+        safe(async () => ((await supabase.from("custom_field_defs").select("*")).data || [])),
+        safe(async () => ((await supabase.from("custom_field_values").select("*")).data || [])),
+        safe(async () => ((await supabase.from("attachments").select("*")).data || [])),
+        safe(async () => ((await supabase.from("notifications").select("*").order("created_at", { ascending: false })).data || [])),
+        safe(async () => ((await supabase.from("automation_rules").select("*")).data || [])),
+        safe(async () => ((await supabase.from("rule_executions").select("*").order("executed_at", { ascending: false }).limit(200)).data || [])),
+        safe(async () => ((await supabase.from("forms").select("*")).data || [])),
+        safe(async () => ((await supabase.from("form_fields").select("*").order("position")).data || [])),
+        safe(async () => ((await supabase.from("form_submissions").select("*").order("submitted_at", { ascending: false })).data || [])),
+        safe(async () => ((await supabase.from("goals").select("*")).data || [])),
+        safe(async () => ((await supabase.from("portfolios").select("*")).data || [])),
+        safe(async () => ((await supabase.from("portfolio_projects").select("*")).data || [])),
+        safe(async () => ((await supabase.from("teams").select("*")).data || [])),
+        safe(async () => ((await supabase.from("team_members").select("*")).data || [])),
+        safe(async () => ((await supabase.from("project_members").select("*")).data || [])),
+        safe(async () => ((await supabase.from("project_status_updates").select("*").order("created_at", { ascending: false })).data || [])),
+        safe(async () => ((await supabase.from("time_entries").select("*").order("started_at", { ascending: false })).data || [])),
+        safe(async () => ((await supabase.from("saved_views").select("*")).data || [])),
+        safe(async () => ((await supabase.from("saved_searches").select("*")).data || [])),
+        safe(async () => ((await supabase.from("dashboards").select("*")).data || [])),
+        safe(async () => ((await supabase.from("dashboard_widgets").select("*")).data || [])),
+        safe(async () => ((await supabase.from("my_task_sections").select("*").order("position")).data || [])),
+      ]);
+
       set({
         users,
         projects,
@@ -239,6 +631,32 @@ export const useAppStore = create<AppState>()(
         tasks,
         notifications: [],
         currentUser: nextUser,
+        tags: tagsD.map(dbToTag),
+        taskTags: taskTagsD.map((r: any) => ({ taskId: r.task_id, tagId: r.tag_id })),
+        taskDeps: depsD.map(dbToDep),
+        taskProjects: taskProjectsD.map((r: any) => ({ taskId: r.task_id, projectId: r.project_id, sectionId: r.section_id ?? null, createdAt: r.created_at })),
+        customFieldDefs: cfdD.map(dbToCustomFieldDef),
+        customFieldValues: cfvD.map(dbToCustomFieldValue),
+        attachments: attachD.map(dbToAttachment),
+        notificationsExt: notifD.map(dbToNotification),
+        rules: rulesD.map(dbToRule),
+        ruleExecutions: ruleExecD.map(dbToRuleExec),
+        forms: formsD.map(dbToForm),
+        formFields: formFieldsD.map(dbToFormField),
+        formSubmissions: formSubD.map(dbToFormSubmission),
+        goalsExt: goalsD.map(dbToGoal),
+        portfoliosExt: portD.map(dbToPortfolio),
+        portfolioProjects: portProjD.map((r: any) => ({ portfolioId: r.portfolio_id, projectId: r.project_id, position: r.position ?? 0 })),
+        teams: teamsD.map(dbToTeam),
+        teamMembers: teamMembD.map((r: any) => ({ teamId: r.team_id, userId: r.user_id, role: r.role ?? "member", createdAt: r.created_at })),
+        projectMembers: projMembD.map((r: any) => ({ projectId: r.project_id, userId: r.user_id, role: r.role ?? "member", createdAt: r.created_at })),
+        projectStatusUpdates: psuD.map(dbToStatusUpdate),
+        timeEntries: timeD.map(dbToTimeEntry),
+        savedViews: savedViewsD.map(dbToSavedView),
+        savedSearches: savedSearchD.map(dbToSavedSearch),
+        dashboards: dashD.map(dbToDashboard),
+        dashboardWidgets: widgetD.map(dbToWidget),
+        myTaskSections: myTaskSecD.map((r: any) => ({ id: r.id, userId: r.user_id, name: r.name, position: r.position ?? 0, createdAt: r.created_at })),
         initialized: true,
         loading: false,
         error: null,
