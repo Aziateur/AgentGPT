@@ -495,6 +495,112 @@ interface AppState {
   // Local state mutations
   setLocalGoals: (goals: any[]) => void;
   setLocalPortfolios: (portfolios: any[]) => void;
+
+  // -- Tags --
+  createTag: (name: string, color?: string) => Promise<TagExt>;
+  deleteTag: (id: string) => Promise<void>;
+  addTagToTask: (taskId: string, tagId: string) => Promise<void>;
+  removeTagFromTask: (taskId: string, tagId: string) => Promise<void>;
+  getTaskTags: (taskId: string) => TagExt[];
+
+  // -- Dependencies --
+  addDependency: (blockerTaskId: string, blockedTaskId: string) => Promise<void>;
+  removeDependency: (id: string) => Promise<void>;
+  getBlockers: (taskId: string) => Task[];     // tasks blocking this task
+  getBlocked: (taskId: string) => Task[];      // tasks this task blocks
+  isTaskBlocked: (taskId: string) => boolean;  // true if any blocker is incomplete
+
+  // -- Custom Fields --
+  createCustomFieldDef: (data: Partial<CustomFieldDefExt>) => Promise<CustomFieldDefExt>;
+  updateCustomFieldDef: (id: string, updates: Partial<CustomFieldDefExt>) => Promise<void>;
+  deleteCustomFieldDef: (id: string) => Promise<void>;
+  setCustomFieldValue: (taskId: string, fieldId: string, value: Partial<CustomFieldValueExt>) => Promise<void>;
+  getCustomFieldValues: (taskId: string) => CustomFieldValueExt[];
+  getProjectCustomFields: (projectId: string) => CustomFieldDefExt[];
+
+  // -- Attachments --
+  addAttachment: (data: Partial<AttachmentFile> & { filename: string; storagePath: string }) => Promise<AttachmentFile>;
+  deleteAttachment: (id: string) => Promise<void>;
+  getTaskAttachments: (taskId: string) => AttachmentFile[];
+
+  // -- Notifications (DB-backed) --
+  createNotification: (n: Partial<NotificationItem> & { userId: string; type: string; title: string }) => Promise<void>;
+  markNotificationExtRead: (id: string) => Promise<void>;
+  markAllNotificationsExtRead: () => Promise<void>;
+  archiveNotificationExt: (id: string) => Promise<void>;
+  snoozeNotification: (id: string, until: string) => Promise<void>;
+
+  // -- Automation Rules --
+  createRule: (data: Partial<AutomationRuleExt> & { name: string; triggerType: string }) => Promise<AutomationRuleExt>;
+  updateRule: (id: string, updates: Partial<AutomationRuleExt>) => Promise<void>;
+  deleteRule: (id: string) => Promise<void>;
+  toggleRule: (id: string) => Promise<void>;
+  logRuleExecution: (ruleId: string, taskId: string | null, status: "success" | "failed" | "skipped", log?: string) => Promise<void>;
+
+  // -- Forms --
+  createForm: (data: Partial<FormExt> & { title: string }) => Promise<FormExt>;
+  updateForm: (id: string, updates: Partial<FormExt>) => Promise<void>;
+  deleteForm: (id: string) => Promise<void>;
+  createFormField: (data: Partial<FormFieldExt> & { formId: string; label: string; fieldType: string }) => Promise<FormFieldExt>;
+  updateFormField: (id: string, updates: Partial<FormFieldExt>) => Promise<void>;
+  deleteFormField: (id: string) => Promise<void>;
+  submitForm: (formId: string, payload: Record<string, unknown>) => Promise<FormSubmissionExt>;
+
+  // -- Goals (Supabase-backed) --
+  createGoal: (data: Partial<GoalExt> & { name: string }) => Promise<GoalExt>;
+  updateGoal: (id: string, updates: Partial<GoalExt>) => Promise<void>;
+  deleteGoal: (id: string) => Promise<void>;
+  linkGoalToProject: (goalId: string, projectId: string) => Promise<void>;
+  unlinkGoalFromProject: (goalId: string, projectId: string) => Promise<void>;
+
+  // -- Portfolios (Supabase-backed) --
+  createPortfolio: (data: Partial<PortfolioExt> & { name: string }) => Promise<PortfolioExt>;
+  updatePortfolio: (id: string, updates: Partial<PortfolioExt>) => Promise<void>;
+  deletePortfolio: (id: string) => Promise<void>;
+  addProjectToPortfolio: (portfolioId: string, projectId: string) => Promise<void>;
+  removeProjectFromPortfolio: (portfolioId: string, projectId: string) => Promise<void>;
+
+  // -- Teams --
+  createTeam: (data: Partial<TeamExt> & { name: string }) => Promise<TeamExt>;
+  updateTeam: (id: string, updates: Partial<TeamExt>) => Promise<void>;
+  deleteTeam: (id: string) => Promise<void>;
+  addTeamMember: (teamId: string, userId: string, role?: string) => Promise<void>;
+  removeTeamMember: (teamId: string, userId: string) => Promise<void>;
+
+  // -- Project Members --
+  addProjectMember: (projectId: string, userId: string, role?: string) => Promise<void>;
+  removeProjectMember: (projectId: string, userId: string) => Promise<void>;
+
+  // -- Project Status Updates --
+  postProjectStatus: (projectId: string, status: string, text?: string) => Promise<void>;
+
+  // -- Time Entries --
+  startTimer: (taskId: string) => Promise<TimeEntry>;
+  stopTimer: (entryId: string, note?: string) => Promise<void>;
+  addTimeEntry: (taskId: string, minutes: number, note?: string) => Promise<TimeEntry>;
+  deleteTimeEntry: (id: string) => Promise<void>;
+  getTaskTimeEntries: (taskId: string) => TimeEntry[];
+  getTaskActualMinutes: (taskId: string) => number;
+
+  // -- Saved Views --
+  createSavedView: (data: Partial<SavedView> & { name: string; viewType: SavedView["viewType"] }) => Promise<SavedView>;
+  updateSavedView: (id: string, updates: Partial<SavedView>) => Promise<void>;
+  deleteSavedView: (id: string) => Promise<void>;
+
+  // -- Dashboards --
+  createDashboard: (name: string, scopeId?: string) => Promise<Dashboard>;
+  deleteDashboard: (id: string) => Promise<void>;
+  addWidget: (dashboardId: string, type: DashboardWidget["type"], config: Record<string, unknown>) => Promise<DashboardWidget>;
+  updateWidget: (id: string, updates: Partial<DashboardWidget>) => Promise<void>;
+  deleteWidget: (id: string) => Promise<void>;
+
+  // -- Task multi-homing --
+  addTaskToProject: (taskId: string, projectId: string, sectionId?: string | null) => Promise<void>;
+  removeTaskFromProject: (taskId: string, projectId: string) => Promise<void>;
+  getTaskProjects: (taskId: string) => string[];
+
+  // -- Recurring tasks helper (called on complete) --
+  spawnRecurrence: (taskId: string) => Promise<Task | null>;
 }
 
 // ---------------------------------------------------------------------------
