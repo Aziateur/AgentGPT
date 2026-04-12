@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { useAppStore } from "@/store/app-store";
+import { installRuleEngine } from "@/lib/rules/hook";
 
 export default function DashboardRootLayout({
   children,
@@ -15,6 +16,11 @@ export default function DashboardRootLayout({
   useEffect(() => {
     init();
   }, [init]);
+
+  useEffect(() => {
+    const cleanup = installRuleEngine();
+    return cleanup;
+  }, []);
 
   if (!initialized || loading) {
     return (

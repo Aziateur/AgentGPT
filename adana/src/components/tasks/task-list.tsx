@@ -1,93 +1,251 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
   Plus,
-  GripVertical,
-  MoreHorizontal,
+  Layers,
 } from "lucide-react";
 import { TaskRow } from "./task-row";
-import type { Task, User, Tag, CustomFieldDef } from "@/types";
-
-// -- Mock data ----------------------------------------------------------------
-
-const mockUsers: Record<string, User> = {
-  "demo-user": { id: "demo-user", name: "Demo User", email: "demo@adana.io", avatar: null, role: "admin", timezone: "UTC", theme: "light" },
-  "user-2": { id: "user-2", name: "Sarah Chen", email: "sarah@adana.io", avatar: null, role: "member", timezone: "UTC", theme: "light" },
-  "user-3": { id: "user-3", name: "Alex Kim", email: "alex@adana.io", avatar: null, role: "member", timezone: "UTC", theme: "light" },
-};
+import { useAppStore } from "@/store/app-store";
+import type { Task, Tag, CustomFieldDef } from "@/types";
 
 // -- Props --------------------------------------------------------------------
 
-export interface TaskListSection {
+export interface TaskListProps {
+  projectId: string;
+  tags?: Tag[];
+  customFieldDefs?: CustomFieldDef[];
+  onTaskClick?: (taskId: string) => void;
+  className?: string;
+}
+
+type GroupBy = "none" | "section" | "assignee" | "priority" | "due";
+
+const GROUP_CYCLE: GroupBy[] = ["none", "section", "assignee", "priority", "due"];
+
+const GROUP_LABEL: Record<GroupBy, string> = {
+  none: "None",
+  section: "Section",
+  assignee: "Assignee",
+  priority: "Priority",
+  due: "Due date",
+};
+
+// -- Grouping -----------------------------------------------------------------
+
+interface Group {
   id: string;
   name: string;
   tasks: Task[];
 }
 
-export interface TaskListProps {
-  sections: TaskListSection[];
-  tags?: Tag[];
-  customFieldDefs?: CustomFieldDef[];
-  onTaskClick?: (taskId: string) => void;
-  onTaskComplete?: (taskId: string, completed: boolean) => void;
-  onTaskUpdate?: (taskId: string, updates: Partial<Task>) => void;
-  onAddTask?: (sectionId: string) => void;
-  onAddSection?: () => void;
-  className?: string;
+function dueBucket(task: Task): { id: string; name: string } {
+  if (!task.dueDate) return { id: "no-date", name: "No due date" };
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const due = new Date(task.dueDate);
+  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  const diffDays = Math.round((dueDay.getTime() - today.getTime()) / 86400000);
+  if (diffDays < 0) return { id: "overdue", name: "Overdue" };
+  if (diffDays === 0) return { id: "today", name: "Today" };
+  if (diffDays <= 7) return { id: "this-week", name: "This week" };
+  if (diffDays <= 30) return { id: "this-month", name: "This month" };
+  return { id: "later", name: "Later" };
+}
+
+function computeGroups(
+  rootTasks: Task[],
+  groupBy: GroupBy,
+  sections: { id: string; name: string }[],
+  users: { id: string; name: string }[]
+): Group[] {
+  if (groupBy === "none") {
+    return [{ id: "all", name: "All tasks", tasks: rootTasks }];
+  }
+
+  const map = new Map<string, Group>();
+  const ensure = (id: string, name: string) => {
+    if (!map.has(id)) map.set(id, { id, name, tasks: [] });
+    return map.get(id)!;
+  };
+
+  if (groupBy === "section") {
+    ensure("__none", "No section");
+    for (const s of sections) ensure(s.id, s.name);
+    for (const t of rootTasks) {
+      ensure(t.sectionId || "__none", "").tasks.push(t);
+    }
+  } else if (groupBy === "assignee") {
+    for (const t of rootTasks) {
+      const id = t.assigneeId || "__unassigned";
+      const name = t.assigneeId
+        ? users.find((u) => u.id === t.assigneeId)?.name || "Unknown"
+        : "Unassigned";
+      ensure(id, name).tasks.push(t);
+    }
+  } else if (groupBy === "priority") {
+    const order = ["high", "medium", "low", "none"];
+    for (const p of order) ensure(p, p === "none" ? "No priority" : p[0].toUpperCase() + p.slice(1));
+    for (const t of rootTasks) {
+      const p = (t.priority as string) || "none";
+      ensure(p, p).tasks.push(t);
+    }
+  } else if (groupBy === "due") {
+    for (const t of rootTasks) {
+      const b = dueBucket(t);
+      ensure(b.id, b.name).tasks.push(t);
+    }
+  }
+
+  return Array.from(map.values()).filter((g) => g.tasks.length > 0 || groupBy === "section");
 }
 
 // -- Component ----------------------------------------------------------------
 
 export function TaskList({
-  sections: initialSections,
+  projectId,
   tags = [],
   customFieldDefs = [],
   onTaskClick,
-  onTaskComplete,
-  onTaskUpdate,
-  onAddTask,
-  onAddSection,
   className,
 }: TaskListProps) {
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
-  const [addingTaskInSection, setAddingTaskInSection] = useState<string | null>(null);
-  const [newTaskName, setNewTaskName] = useState("");
+  const allTasks = useAppStore((s) => s.tasks);
+  const sections = useAppStore((s) => s.getProjectSections(projectId));
+  const users = useAppStore((s) => s.users);
+  const updateTask = useAppStore((s) => s.updateTask);
+  const toggleTaskComplete = useAppStore((s) => s.toggleTaskComplete);
+  const createTask = useAppStore((s) => s.createTask);
 
-  function toggleSection(sectionId: string) {
-    setCollapsedSections((prev) => {
-      const next = new Set(prev);
-      if (next.has(sectionId)) {
-        next.delete(sectionId);
-      } else {
-        next.add(sectionId);
+  const [groupBy, setGroupBy] = useState<GroupBy>("section");
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+
+  // All project tasks (including subtasks) — we'll render tree manually
+  const projectTasks = useMemo(
+    () => allTasks.filter((t) => t.projectId === projectId),
+    [allTasks, projectId]
+  );
+  const rootTasks = useMemo(
+    () => projectTasks.filter((t) => !t.parentId),
+    [projectTasks]
+  );
+  const childrenByParent = useMemo(() => {
+    const map = new Map<string, Task[]>();
+    for (const t of projectTasks) {
+      if (t.parentId) {
+        if (!map.has(t.parentId)) map.set(t.parentId, []);
+        map.get(t.parentId)!.push(t);
       }
+    }
+    return map;
+  }, [projectTasks]);
+
+  const groups = useMemo(
+    () => computeGroups(rootTasks, groupBy, sections, users),
+    [rootTasks, groupBy, sections, users]
+  );
+
+  function toggleGroup(id: string) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }
 
-  function handleAddTask(sectionId: string) {
-    if (newTaskName.trim()) {
-      onAddTask?.(sectionId);
-      setNewTaskName("");
-    }
-    setAddingTaskInSection(null);
+  function toggleTask(id: string) {
+    setExpandedTasks((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
-  const getTaskTags = (task: Task) => {
-    return (task.tagIds || []).map((id) => tags.find((t) => t.id === id)).filter(Boolean) as Tag[];
-  };
+  function cycleGroupBy() {
+    const idx = GROUP_CYCLE.indexOf(groupBy);
+    setGroupBy(GROUP_CYCLE[(idx + 1) % GROUP_CYCLE.length]);
+  }
 
-  const totalTasks = initialSections.reduce((sum, s) => sum + s.tasks.length, 0);
+  async function handleAddTask() {
+    await createTask({ projectId, title: "New task" } as any);
+  }
+
+  function getAssignee(assigneeId: string | null) {
+    if (!assigneeId) return null;
+    return (users as any[]).find((u) => u.id === assigneeId) ?? null;
+  }
+
+  function renderTaskTree(task: Task, depth: number): React.ReactNode {
+    const children = childrenByParent.get(task.id) || [];
+    const hasChildren = children.length > 0;
+    const isExpanded = expandedTasks.has(task.id);
+    const taskTags = tags.filter((t) => (task.tagIds || []).includes(t.id));
+
+    return (
+      <div key={task.id}>
+        <div className={`flex items-center ${depth > 0 ? `pl-${Math.min(depth * 6, 24)}` : ""}`} style={depth > 0 ? { paddingLeft: depth * 24 } : undefined}>
+          <button
+            onClick={() => hasChildren && toggleTask(task.id)}
+            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 ${
+              hasChildren ? "hover:bg-gray-200 hover:text-gray-700" : "invisible"
+            }`}
+            aria-label="Toggle subtasks"
+          >
+            {hasChildren && (isExpanded ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            ))}
+          </button>
+          <div className="min-w-0 flex-1">
+            <TaskRow
+              task={task}
+              assignee={getAssignee(task.assigneeId ?? null) as any}
+              tags={taskTags}
+              customFieldDefs={customFieldDefs}
+              onComplete={(id) => toggleTaskComplete(id)}
+              onUpdate={(id, updates) => updateTask(id, updates as Partial<Task>)}
+              onClick={onTaskClick}
+            />
+          </div>
+        </div>
+        {hasChildren && isExpanded && (
+          <>{children.map((c) => renderTaskTree(c, depth + 1))}</>
+        )}
+      </div>
+    );
+  }
+
+  const totalTasks = rootTasks.length;
 
   return (
     <div className={className}>
+      {/* Toolbar */}
+      <div className="flex items-center gap-2 border-b border-gray-200 bg-white px-3 py-2">
+        <button
+          onClick={cycleGroupBy}
+          className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+        >
+          <Layers className="h-3.5 w-3.5" />
+          Group: {GROUP_LABEL[groupBy]}
+        </button>
+        <div className="flex-1" />
+        <button
+          onClick={handleAddTask}
+          className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add task
+        </button>
+      </div>
+
       {/* Column headers */}
       <div className="flex items-center gap-1 border-b border-gray-200 px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-        <div className="w-5" /> {/* drag handle */}
-        <div className="w-5" /> {/* checkbox */}
+        <div className="w-5" /> {/* chevron */}
         <div className="min-w-0 flex-1 px-2">Task name</div>
         <div className="w-8 text-center">Assignee</div>
         <div className="w-28">Due date</div>
@@ -95,17 +253,16 @@ export function TaskList({
         <div className="w-36">Tags</div>
       </div>
 
-      {/* Sections */}
-      {initialSections.map((section) => {
-        const isCollapsed = collapsedSections.has(section.id);
-        const completedCount = section.tasks.filter((t) => t.completed).length;
+      {/* Groups */}
+      {groups.map((group) => {
+        const isCollapsed = collapsedGroups.has(group.id);
+        const completedCount = group.tasks.filter((t) => t.completed).length;
 
         return (
-          <div key={section.id}>
-            {/* Section header */}
+          <div key={group.id}>
             <div className="group flex items-center gap-1 border-b border-gray-100 bg-gray-50/80 px-2 py-1.5">
               <button
-                onClick={() => toggleSection(section.id)}
+                onClick={() => toggleGroup(group.id)}
                 className="rounded p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
               >
                 {isCollapsed ? (
@@ -114,66 +271,20 @@ export function TaskList({
                   <ChevronDown className="h-3.5 w-3.5" />
                 )}
               </button>
-              <GripVertical className="h-3.5 w-3.5 text-gray-300 opacity-0 group-hover:opacity-100" />
-              <h3 className="text-xs font-semibold text-gray-700">{section.name}</h3>
+              <h3 className="text-xs font-semibold text-gray-700">{group.name}</h3>
               <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] text-gray-500">
-                {completedCount}/{section.tasks.length}
+                {completedCount}/{group.tasks.length}
               </span>
-              <div className="flex-1" />
-              <button className="rounded p-0.5 text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-gray-200 hover:text-gray-600">
-                <MoreHorizontal className="h-3.5 w-3.5" />
-              </button>
             </div>
 
-            {/* Task rows */}
             {!isCollapsed && (
               <>
-                {section.tasks.length === 0 ? (
+                {group.tasks.length === 0 ? (
                   <div className="border-b border-gray-100 px-6 py-4 text-center text-xs text-gray-400">
-                    No tasks in this section
+                    No tasks
                   </div>
                 ) : (
-                  section.tasks.map((task) => (
-                    <TaskRow
-                      key={task.id}
-                      task={task}
-                      assignee={task.assigneeId ? mockUsers[task.assigneeId] : null}
-                      tags={tags.filter((t) => (task.tagIds || []).includes(t.id))}
-                      customFieldDefs={customFieldDefs}
-                      onComplete={onTaskComplete}
-                      onUpdate={onTaskUpdate}
-                      onClick={onTaskClick}
-                    />
-                  ))
-                )}
-
-                {/* Add task input */}
-                {addingTaskInSection === section.id ? (
-                  <div className="flex items-center gap-1 border-b border-gray-100 px-2 py-1.5">
-                    <div className="w-5" />
-                    <div className="w-5" />
-                    <input
-                      type="text"
-                      value={newTaskName}
-                      onChange={(e) => setNewTaskName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleAddTask(section.id);
-                        if (e.key === "Escape") setAddingTaskInSection(null);
-                      }}
-                      onBlur={() => handleAddTask(section.id)}
-                      autoFocus
-                      placeholder="Task name..."
-                      className="min-w-0 flex-1 bg-transparent px-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none"
-                    />
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setAddingTaskInSection(section.id)}
-                    className="flex w-full items-center gap-1.5 border-b border-gray-100 px-4 py-2 text-xs text-gray-400 transition hover:bg-gray-50 hover:text-gray-600"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add task...
-                  </button>
+                  group.tasks.map((t) => renderTaskTree(t, 0))
                 )}
               </>
             )}
@@ -181,22 +292,11 @@ export function TaskList({
         );
       })}
 
-      {/* Add section */}
-      <button
-        onClick={onAddSection}
-        className="flex w-full items-center gap-1.5 px-4 py-3 text-xs text-gray-400 transition hover:bg-gray-50 hover:text-gray-600"
-      >
-        <Plus className="h-3.5 w-3.5" />
-        Add section
-      </button>
-
       {/* Empty state */}
       {totalTasks === 0 && (
         <div className="px-6 py-16 text-center">
           <p className="text-sm font-medium text-gray-900">No tasks yet</p>
-          <p className="mt-1 text-sm text-gray-500">
-            Add a task to get started.
-          </p>
+          <p className="mt-1 text-sm text-gray-500">Click &quot;Add task&quot; to get started.</p>
         </div>
       )}
     </div>
