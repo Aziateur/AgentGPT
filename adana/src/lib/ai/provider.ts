@@ -30,7 +30,7 @@ class AnthropicProvider implements AIProvider {
     this.id = config.id;
     this.label = config.label;
     this.apiKey = config.apiKey || "";
-    this.model = config.model || "claude-3-5-sonnet-latest";
+    this.model = config.model || "claude-sonnet-4-6";
   }
 
   async chat(messages: ChatMessage[], opts?: ChatOpts): Promise<string> {

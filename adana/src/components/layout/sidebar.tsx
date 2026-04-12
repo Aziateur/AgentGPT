@@ -15,6 +15,7 @@ import {
   ChevronRight,
   UserPlus,
   Users,
+  Sparkles,
 } from "lucide-react";
 import { useAppStore } from "@/stores/app-store";
 import { cn } from "@/lib/utils";
@@ -373,6 +374,13 @@ export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: Si
           label="Reporting"
           collapsed={sidebarCollapsed}
           active={pathname === "/reporting"}
+        />
+        <NavItem
+          href="/settings/ai"
+          icon={<Sparkles className="h-4 w-4" />}
+          label="AI Settings"
+          collapsed={sidebarCollapsed}
+          active={pathname === "/settings/ai" || pathname.startsWith("/settings/ai")}
         />
 
         <Separator />
