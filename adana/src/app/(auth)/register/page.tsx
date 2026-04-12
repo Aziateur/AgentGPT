@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff, ArrowRight, Loader2, Check } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAppStore } from "@/store/app-store";
+import { hashPassword } from "@/lib/auth-hash";
 
 const passwordRequirements = [
   { label: "At least 8 characters", test: (p: string) => p.length >= 8 },
@@ -41,6 +42,7 @@ export default function RegisterPage() {
 
     try {
       // Create user in public.users
+      const password_hash = await hashPassword(password);
       const newUser = {
         id: crypto.randomUUID(),
         name: name.trim(),
@@ -48,8 +50,10 @@ export default function RegisterPage() {
         avatar: null,
       };
 
-      const { error: dbError } = await supabase.from("users").insert(newUser);
-      
+      const { error: dbError } = await supabase
+        .from("users")
+        .insert({ ...newUser, password_hash });
+
       if (dbError) {
         if (dbError.code === "23505") { // unique violation
           setError("An account with this email already exists.");
@@ -60,7 +64,7 @@ export default function RegisterPage() {
         return;
       }
 
-      // Update store
+      // Update store (strip password_hash)
       useAppStore.getState().setCurrentUser(newUser);
       router.push("/home");
     } catch (err) {

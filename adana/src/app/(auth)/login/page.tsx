@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAppStore } from "@/store/app-store";
+import { hashPassword, verifyPassword } from "@/lib/auth-hash";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,14 +34,38 @@ export default function LoginPage() {
         .select("*")
         .eq("email", email.trim())
         .single();
-        
+
       if (dbError || !userRow) {
-        setError("Invalid email or user not found.");
+        setError("Invalid email or password.");
         setLoading(false);
         return;
       }
 
-      // Found the user, set them in the store
+      if (!userRow.password_hash) {
+        // Legacy / seeded demo account with no password set — allow login.
+        console.warn(
+          `[auth] Legacy account '${userRow.email}' has no password_hash; allowing login and adopting supplied password.`
+        );
+        // Adopt the supplied password for subsequent logins.
+        try {
+          const newHash = await hashPassword(password);
+          await supabase
+            .from("users")
+            .update({ password_hash: newHash })
+            .eq("id", userRow.id);
+        } catch {
+          // Non-fatal: if the update fails, legacy login still worked.
+        }
+      } else {
+        const ok = await verifyPassword(password, userRow.password_hash);
+        if (!ok) {
+          setError("Invalid email or password.");
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Found the user, set them in the store (strip password_hash)
       const userObj = {
         id: userRow.id,
         name: userRow.name,

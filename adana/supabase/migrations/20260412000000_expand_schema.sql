@@ -11,6 +11,8 @@
 ALTER TABLE public.users
   ADD COLUMN IF NOT EXISTS weekly_capacity_hours NUMERIC(6,2);
 
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+
 ALTER TABLE public.projects
   ADD COLUMN IF NOT EXISTS start_date TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS due_date   TIMESTAMPTZ,
