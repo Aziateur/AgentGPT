@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useAppStore } from "@/store/app-store";
 import type { Task } from "@/types";
@@ -194,6 +195,12 @@ export default function PortfoliosPage() {
               </div>
               {portfolio.id !== "default" && (
                 <>
+                  <Link
+                    href={`/portfolio?id=${portfolio.id}`}
+                    className="rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
+                  >
+                    View details
+                  </Link>
                   <button
                     onClick={() => setAddingToPortfolio(addingToPortfolio === portfolio.id ? null : portfolio.id)}
                     className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
