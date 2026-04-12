@@ -507,6 +507,14 @@ interface AppState {
   getProjectSections: (projectId: string) => Section[];
   getMyTasks: () => { today: Task[]; upcoming: Task[]; later: Task[]; recurring: Task[] };
 
+  // Per-user visibility selectors
+  visibleProjectIds: () => string[];
+  getVisibleProjects: () => Project[];
+  getMyGoals: () => GoalExt[];
+  getMyPortfolios: () => PortfolioExt[];
+  getMyTeams: () => TeamExt[];
+  getMyNotifications: () => NotificationItem[];
+
   // Local state mutations
   setLocalGoals: (goals: any[]) => void;
   setLocalPortfolios: (portfolios: any[]) => void;
@@ -1051,6 +1059,52 @@ export const useAppStore = create<AppState>()(
     const recurring = get().tasks.filter((t) => t.assigneeId === userId && !t.completed && t.taskType === "recurring");
 
     return { today, upcoming, later, recurring };
+  },
+
+  // -- Per-user visibility selectors ---------------------------------------
+
+  visibleProjectIds: (): string[] => {
+    const uid = get().currentUser.id;
+    if (!uid) return get().projects.map((p) => p.id);
+    const ownerProjects = get().projects.filter((p) => p.creatorId === uid).map((p) => p.id);
+    const memberProjects = get().projectMembers
+      .filter((m) => m.userId === uid)
+      .map((m) => m.projectId);
+    return Array.from(new Set([...ownerProjects, ...memberProjects]));
+  },
+
+  getVisibleProjects: (): Project[] => {
+    const uid = get().currentUser.id;
+    if (!uid) return get().projects;
+    const ids = new Set(get().visibleProjectIds());
+    return get().projects.filter((p) => ids.has(p.id));
+  },
+
+  getMyGoals: (): GoalExt[] => {
+    const uid = get().currentUser.id;
+    if (!uid) return get().goalsExt;
+    return get().goalsExt.filter((g) => g.ownerId === uid);
+  },
+
+  getMyPortfolios: (): PortfolioExt[] => {
+    const uid = get().currentUser.id;
+    if (!uid) return get().portfoliosExt;
+    return get().portfoliosExt.filter((p) => p.ownerId === uid);
+  },
+
+  getMyTeams: (): TeamExt[] => {
+    const uid = get().currentUser.id;
+    if (!uid) return get().teams;
+    return get().teams.filter(
+      (t) =>
+        t.ownerId === uid ||
+        get().teamMembers.some((m) => m.teamId === t.id && m.userId === uid)
+    );
+  },
+
+  getMyNotifications: (): NotificationItem[] => {
+    const uid = get().currentUser.id;
+    return get().notificationsExt.filter((n) => n.userId === uid);
   },
 
   setLocalGoals: (goals) => set({ localGoals: goals }),

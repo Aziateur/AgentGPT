@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useAppStore } from "@/store/app-store";
+import type { GoalExt, GoalContribution, Project } from "@/types";
 
 // -- Types --------------------------------------------------------------------
 
-interface GoalData {
+interface GoalNode {
   id: string;
   name: string;
   description: string | null;
@@ -15,7 +16,7 @@ interface GoalData {
   parentId: string | null;
   ownerInitial: string;
   ownerName: string;
-  subGoals: GoalData[];
+  subGoals: GoalNode[];
 }
 
 // -- Helpers ------------------------------------------------------------------
@@ -57,15 +58,26 @@ type StatusFilterKey = "all" | string;
 function GoalCard({
   goal,
   depth = 0,
+  linkedProjects,
+  allProjects,
   onDelete,
   onUpdateStatus,
+  onUpdateProgress,
+  onAddSubGoal,
+  onLinkProject,
 }: {
-  goal: GoalData;
+  goal: GoalNode;
   depth?: number;
+  linkedProjects: Project[];
+  allProjects: Project[];
   onDelete: (id: string) => void;
   onUpdateStatus: (id: string, status: string) => void;
+  onUpdateProgress: (id: string, progress: number) => void;
+  onAddSubGoal: (parentId: string) => void;
+  onLinkProject: (goalId: string, projectId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
+  const [showProjectDropdown, setShowProjectDropdown] = useState(false);
   const progress = goal.progress;
 
   return (
@@ -107,6 +119,24 @@ function GoalCard({
               <p className="mt-1 text-xs text-gray-500">{goal.description}</p>
             )}
 
+            {/* Linked projects */}
+            {linkedProjects.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1">
+                {linkedProjects.map((p) => (
+                  <span
+                    key={p.id}
+                    className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-700"
+                  >
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ backgroundColor: p.color || "#4c6ef5" }}
+                    />
+                    {p.name}
+                  </span>
+                ))}
+              </div>
+            )}
+
             {/* Progress */}
             <div className="mt-3 flex items-center gap-3">
               <div className="h-2 flex-1 rounded-full bg-gray-100">
@@ -115,7 +145,18 @@ function GoalCard({
                   style={{ width: `${progress}%` }}
                 />
               </div>
-              <span className="text-xs font-medium text-gray-600">{progress}%</span>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={progress}
+                onChange={(e) => {
+                  const n = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                  onUpdateProgress(goal.id, n);
+                }}
+                className="w-14 rounded border border-gray-200 px-1.5 py-0.5 text-xs font-medium text-gray-600 focus:outline-none"
+              />
+              <span className="text-xs font-medium text-gray-600">%</span>
             </div>
 
             {/* Owner + actions */}
@@ -127,6 +168,55 @@ function GoalCard({
                 <span className="text-xs text-gray-500">{goal.ownerName}</span>
               </div>
               <div className="flex items-center gap-1">
+                <button
+                  onClick={() => onAddSubGoal(goal.id)}
+                  className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 hover:bg-gray-50"
+                  title="Add sub-goal"
+                >
+                  + Add sub-goal
+                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowProjectDropdown((v) => !v)}
+                    className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 hover:bg-gray-50"
+                    title="Link project"
+                  >
+                    🔗 Link project
+                  </button>
+                  {showProjectDropdown && (
+                    <div className="absolute right-0 z-10 mt-1 max-h-56 w-48 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                      {allProjects.length === 0 ? (
+                        <div className="px-3 py-2 text-xs text-gray-400">No projects</div>
+                      ) : (
+                        allProjects.map((p) => {
+                          const already = linkedProjects.some((lp) => lp.id === p.id);
+                          return (
+                            <button
+                              key={p.id}
+                              disabled={already}
+                              onClick={() => {
+                                if (!already) onLinkProject(goal.id, p.id);
+                                setShowProjectDropdown(false);
+                              }}
+                              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs ${
+                                already
+                                  ? "cursor-not-allowed text-gray-300"
+                                  : "text-gray-700 hover:bg-gray-50"
+                              }`}
+                            >
+                              <span
+                                className="h-2 w-2 rounded-full"
+                                style={{ backgroundColor: p.color || "#4c6ef5" }}
+                              />
+                              <span className="truncate">{p.name}</span>
+                              {already && <span className="ml-auto text-[9px]">linked</span>}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
                 <select
                   value={goal.status}
                   onChange={(e) => onUpdateStatus(goal.id, e.target.value)}
@@ -159,8 +249,13 @@ function GoalCard({
               key={sub.id}
               goal={sub}
               depth={depth + 1}
+              linkedProjects={[]}
+              allProjects={allProjects}
               onDelete={onDelete}
               onUpdateStatus={onUpdateStatus}
+              onUpdateProgress={onUpdateProgress}
+              onAddSubGoal={onAddSubGoal}
+              onLinkProject={onLinkProject}
             />
           ))}
         </div>
@@ -172,8 +267,17 @@ function GoalCard({
 // -- Main component -----------------------------------------------------------
 
 export default function GoalsPage() {
-  const { localGoals, setLocalGoals, currentUser } = useAppStore();
-  const goals: GoalData[] = localGoals || [];
+  const goalsExt = useAppStore((s) => s.goalsExt);
+  const projects = useAppStore((s) => s.projects);
+  const users = useAppStore((s) => s.users);
+  const currentUser = useAppStore((s) => s.currentUser);
+  const createGoal = useAppStore((s) => s.createGoal);
+  const updateGoal = useAppStore((s) => s.updateGoal);
+  const deleteGoal = useAppStore((s) => s.deleteGoal);
+  const linkGoalToProject = useAppStore((s) => s.linkGoalToProject);
+  const goalContributions = useAppStore(
+    (s) => ((s as unknown as { goalContributions?: GoalContribution[] }).goalContributions) ?? []
+  );
 
   const [statusFilter, setStatusFilter] = useState<StatusFilterKey>("all");
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -181,51 +285,111 @@ export default function GoalsPage() {
   const [newDescription, setNewDescription] = useState("");
   const [newStatus, setNewStatus] = useState("on_track");
   const [newPeriod, setNewPeriod] = useState("");
+  const [newParentId, setNewParentId] = useState<string | null>(null);
 
-  const handleCreate = () => {
-    if (!newName.trim()) return;
-    const newGoal: GoalData = {
-      id: `goal-${Date.now()}`,
-      name: newName.trim(),
-      description: newDescription.trim() || null,
-      status: newStatus,
-      progress: 0,
-      period: newPeriod.trim() || null,
-      parentId: null,
-      ownerInitial: currentUser?.name?.charAt(0).toUpperCase() || "Y",
-      ownerName: currentUser?.name || "You",
-      subGoals: [],
+  // Build goal tree from flat list
+  const tree = useMemo<GoalNode[]>(() => {
+    const byId = new Map<string, GoalNode>();
+    const toNode = (g: GoalExt): GoalNode => {
+      const owner = users.find((u) => u.id === g.ownerId);
+      const ownerName = owner?.name || currentUser?.name || "You";
+      return {
+        id: g.id,
+        name: g.name,
+        description: g.description ?? null,
+        status: g.status,
+        progress: g.progress ?? 0,
+        period: g.timePeriod ?? null,
+        parentId: g.parentId ?? null,
+        ownerInitial: (ownerName || "?").charAt(0).toUpperCase(),
+        ownerName,
+        subGoals: [],
+      };
     };
-    setLocalGoals([newGoal, ...goals]);
+    for (const g of goalsExt) byId.set(g.id, toNode(g));
+    const roots: GoalNode[] = [];
+    for (const g of goalsExt) {
+      const node = byId.get(g.id)!;
+      if (g.parentId && byId.has(g.parentId)) {
+        byId.get(g.parentId)!.subGoals.push(node);
+      } else {
+        roots.push(node);
+      }
+    }
+    return { tree: roots, goalsById: byId };
+  }, [goalsExt, users, currentUser]);
+
+  const linkedProjectsByGoal = useMemo(() => {
+    const map = new Map<string, Project[]>();
+    for (const c of goalContributions) {
+      if (!c.projectId) continue;
+      const p = projects.find((pr) => pr.id === c.projectId);
+      if (!p) continue;
+      const arr = map.get(c.goalId) ?? [];
+      arr.push(p);
+      map.set(c.goalId, arr);
+    }
+    return map;
+  }, [goalContributions, projects]);
+
+  const openCreateModal = (parentId: string | null) => {
     setNewName("");
     setNewDescription("");
     setNewStatus("on_track");
     setNewPeriod("");
+    setNewParentId(parentId);
+    setShowCreateModal(true);
+  };
+
+  const handleCreate = async () => {
+    if (!newName.trim()) return;
+    await createGoal({
+      name: newName.trim(),
+      description: newDescription.trim() || null,
+      status: newStatus,
+      timePeriod: newPeriod.trim() || null,
+      parentId: newParentId,
+      ownerId: currentUser?.id ?? null,
+    });
     setShowCreateModal(false);
+    setNewParentId(null);
   };
 
   const handleDelete = (id: string) => {
-    const removeGoal = (list: GoalData[]): GoalData[] =>
-      list
-        .filter((g) => g.id !== id)
-        .map((g) => ({ ...g, subGoals: removeGoal(g.subGoals) }));
-    setLocalGoals(removeGoal(goals));
+    void deleteGoal(id);
   };
 
   const handleUpdateStatus = (id: string, status: string) => {
-    const updateGoal = (list: GoalData[]): GoalData[] =>
-      list.map((g) =>
-        g.id === id
-          ? { ...g, status }
-          : { ...g, subGoals: updateGoal(g.subGoals) }
-      );
-    setLocalGoals(updateGoal(goals));
+    void updateGoal(id, { status });
   };
 
-  const filtered = goals.filter((g) => {
+  const handleUpdateProgress = (id: string, progress: number) => {
+    void updateGoal(id, { progress });
+  };
+
+  const handleLinkProject = (goalId: string, projectId: string) => {
+    void linkGoalToProject(goalId, projectId);
+  };
+
+  // Filter: only top-level goals pass through status filter for grouping
+  const filtered = tree.filter((g) => {
     if (statusFilter !== "all" && g.status !== statusFilter) return false;
     return true;
   });
+
+  // Group by time period (top-level only)
+  const grouped = useMemo(() => {
+    const groups = new Map<string, GoalNode[]>();
+    for (const g of filtered) {
+      const key = g.period || "No period";
+      const arr = groups.get(key) ?? [];
+      arr.push(g);
+      groups.set(key, arr);
+    }
+    return Array.from(groups.entries());
+  }, [filtered]);
+
+  const flatGoalsForSelect: GoalExt[] = goalsExt;
 
   return (
     <div className="mx-auto max-w-4xl p-6">
@@ -233,7 +397,7 @@ export default function GoalsPage() {
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Goals</h1>
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={() => openCreateModal(null)}
           className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
         >
           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -280,16 +444,16 @@ export default function GoalsPage() {
             />
           </svg>
           <p className="text-sm font-medium text-gray-900">
-            {goals.length === 0 ? "No goals yet" : "No goals match this filter"}
+            {goalsExt.length === 0 ? "No goals yet" : "No goals match this filter"}
           </p>
           <p className="mt-1 text-sm text-gray-500">
-            {goals.length === 0
+            {goalsExt.length === 0
               ? "Create your first goal to start tracking OKRs."
               : "Try a different filter or create a new goal."}
           </p>
-          {goals.length === 0 && (
+          {goalsExt.length === 0 && (
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => openCreateModal(null)}
               className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
             >
               Create first goal
@@ -297,14 +461,28 @@ export default function GoalsPage() {
           )}
         </div>
       ) : (
-        <div className="space-y-4">
-          {filtered.map((goal) => (
-            <GoalCard
-              key={goal.id}
-              goal={goal}
-              onDelete={handleDelete}
-              onUpdateStatus={handleUpdateStatus}
-            />
+        <div className="space-y-8">
+          {grouped.map(([period, periodGoals]) => (
+            <div key={period}>
+              <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                {period}
+              </h2>
+              <div className="space-y-4">
+                {periodGoals.map((goal) => (
+                  <GoalCard
+                    key={goal.id}
+                    goal={goal}
+                    linkedProjects={linkedProjectsByGoal.get(goal.id) ?? []}
+                    allProjects={projects}
+                    onDelete={handleDelete}
+                    onUpdateStatus={handleUpdateStatus}
+                    onUpdateProgress={handleUpdateProgress}
+                    onAddSubGoal={openCreateModal}
+                    onLinkProject={handleLinkProject}
+                  />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -313,7 +491,9 @@ export default function GoalsPage() {
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-            <h2 className="mb-4 text-lg font-semibold text-gray-900">Create Goal</h2>
+            <h2 className="mb-4 text-lg font-semibold text-gray-900">
+              {newParentId ? "Create Sub-Goal" : "Create Goal"}
+            </h2>
             <div className="space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Name</label>
@@ -334,6 +514,19 @@ export default function GoalsPage() {
                   placeholder="Describe this goal..."
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                 />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Parent Goal</label>
+                <select
+                  value={newParentId ?? ""}
+                  onChange={(e) => setNewParentId(e.target.value || null)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                >
+                  <option value="">None (top-level)</option>
+                  {flatGoalsForSelect.map((g) => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -362,7 +555,10 @@ export default function GoalsPage() {
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <button
-                onClick={() => setShowCreateModal(false)}
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setNewParentId(null);
+                }}
                 className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
               >
                 Cancel
@@ -380,3 +576,7 @@ export default function GoalsPage() {
     </div>
   );
 }
+
+// Intentional dead reference to keep `goalsById` calc usable if extended.
+// (Actual use lives in the memo above.)
+export const __DEAD__ = (_: Map<string, GoalNode>) => _;

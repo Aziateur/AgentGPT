@@ -20,10 +20,10 @@ export async function verifyPassword(password: string, stored: string): Promise<
     const [scheme, iterStr, saltHex, hashHex] = stored.split("$");
     if (scheme !== "pbkdf2") return false;
     const iter = parseInt(iterStr, 10);
-    const salt = fromHex(saltHex);
+    const salt: Uint8Array = fromHex(saltHex);
     const enc = new TextEncoder();
     const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
-    const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: iter }, keyMaterial, 256);
+    const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: salt as BufferSource, iterations: iter }, keyMaterial, 256);
     return toHex(new Uint8Array(bits)) === hashHex;
   } catch { return false; }
 }

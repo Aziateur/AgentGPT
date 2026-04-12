@@ -20,11 +20,12 @@ export function createGoalsSlice(set: SetFn, get: GetFn) {
       data: Partial<GoalExt> & { name: string }
     ): Promise<GoalExt> => {
       const now = new Date().toISOString();
+      const currentUserId = get().currentUser?.id || null;
       const goal: GoalExt = {
         id: data.id ?? crypto.randomUUID(),
         name: data.name,
         description: data.description ?? null,
-        ownerId: data.ownerId ?? null,
+        ownerId: data.ownerId ?? currentUserId,
         parentId: data.parentId ?? null,
         timePeriod: data.timePeriod ?? null,
         startDate: data.startDate ?? null,
@@ -169,12 +170,13 @@ export function createPortfoliosSlice(set: SetFn, get: GetFn) {
       data: Partial<PortfolioExt> & { name: string }
     ): Promise<PortfolioExt> => {
       const now = new Date().toISOString();
+      const currentUserId = get().currentUser?.id || null;
       const portfolio: PortfolioExt = {
         id: data.id ?? crypto.randomUUID(),
         name: data.name,
         description: data.description ?? null,
         color: data.color ?? "#4c6ef5",
-        ownerId: data.ownerId ?? null,
+        ownerId: data.ownerId ?? currentUserId,
         parentId: data.parentId ?? null,
         createdAt: data.createdAt ?? now,
         updatedAt: data.updatedAt ?? now,
@@ -314,11 +316,12 @@ export function createTeamsSlice(set: SetFn, get: GetFn) {
       data: Partial<TeamExt> & { name: string }
     ): Promise<TeamExt> => {
       const now = new Date().toISOString();
+      const currentUserId = get().currentUser?.id || null;
       const team: TeamExt = {
         id: data.id ?? crypto.randomUUID(),
         name: data.name,
         description: data.description ?? null,
-        ownerId: data.ownerId ?? null,
+        ownerId: data.ownerId ?? currentUserId,
         createdAt: data.createdAt ?? now,
         updatedAt: data.updatedAt ?? now,
       };
