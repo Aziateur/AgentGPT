@@ -391,9 +391,9 @@ export function FormBuilder({ formId: initialFormId, projectId }: FormBuilderPro
 
   const publicUrl =
     typeof window !== "undefined" && form?.publicSlug
-      ? `${window.location.origin}/f/${form.publicSlug}`
+      ? `${window.location.origin}/f?slug=${form.publicSlug}`
       : form?.publicSlug
-      ? `/f/${form.publicSlug}`
+      ? `/f?slug=${form.publicSlug}`
       : "";
 
   const handleCopyUrl = async () => {
