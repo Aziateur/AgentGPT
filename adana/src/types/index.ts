@@ -367,3 +367,344 @@ export interface FilterOption {
   value: unknown;
   label: string;
 }
+
+// ============================================================
+// Extended schema types (2026-04 expansion)
+// ============================================================
+
+export type RecurrenceFreq = "daily" | "weekly" | "monthly" | "yearly";
+
+export interface RecurrenceRule {
+  freq: RecurrenceFreq;
+  interval?: number;           // every N periods, default 1
+  byDay?: number[];            // 0=Sun..6=Sat, for weekly
+  byMonthDay?: number;         // for monthly
+  endAfter?: number;           // occurrences
+  endOn?: string | null;       // ISO date
+}
+
+export interface TaskDependencyEdge {
+  id: string;
+  blockerTaskId: string;
+  blockedTaskId: string;
+  depType: "finish_to_start" | "start_to_start" | "finish_to_finish" | "start_to_finish";
+  createdAt: string;
+}
+
+export interface AttachmentFile {
+  id: string;
+  taskId?: string | null;
+  projectId?: string | null;
+  uploaderId?: string | null;
+  filename: string;
+  mimeType?: string | null;
+  sizeBytes?: number | null;
+  storagePath: string;
+  publicUrl?: string | null;
+  createdAt: string;
+}
+
+export interface NotificationItem {
+  id: string;
+  userId: string;
+  actorId?: string | null;
+  type: string;
+  taskId?: string | null;
+  projectId?: string | null;
+  title: string;
+  message?: string | null;
+  linkUrl?: string | null;
+  read: boolean;
+  archived: boolean;
+  snoozedUntil?: string | null;
+  createdAt: string;
+}
+
+// Rich automation-rule shape that matches the new JSONB schema.
+// Existing AutomationRule (above) keeps its legacy string shape for back-compat.
+export interface RuleTrigger {
+  type: string; // task_created | task_completed | task_moved | due_date_approaching | assignee_changed | custom_field_changed | comment_added | form_submitted
+  config?: Record<string, unknown>;
+}
+
+export interface RuleActionSpec {
+  type: string; // assign | move_section | set_field | add_comment | complete | set_priority | add_tag | notify
+  config?: Record<string, unknown>;
+  condition?: Record<string, unknown>;
+}
+
+export interface AutomationRuleExt {
+  id: string;
+  projectId?: string | null;
+  name: string;
+  enabled: boolean;
+  triggerType: string;
+  triggerConfig: Record<string, unknown>;
+  actions: RuleActionSpec[];
+  scope: "project" | "workspace" | "my_tasks";
+  userId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RuleExecutionExt {
+  id: string;
+  ruleId: string;
+  taskId?: string | null;
+  status: "success" | "failed" | "skipped";
+  log?: string | null;
+  executedAt: string;
+}
+
+export interface FormExt {
+  id: string;
+  projectId?: string | null;
+  title: string;
+  description?: string | null;
+  publicSlug?: string | null;
+  settings: Record<string, unknown>;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  fields?: FormFieldExt[];
+}
+
+export interface FormFieldExt {
+  id: string;
+  formId: string;
+  label: string;
+  fieldType: string;
+  options?: Record<string, unknown> | null;
+  required: boolean;
+  position: number;
+}
+
+export interface FormSubmissionExt {
+  id: string;
+  formId: string;
+  taskId?: string | null;
+  payload: Record<string, unknown>;
+  submittedAt: string;
+}
+
+export interface GoalExt {
+  id: string;
+  name: string;
+  description?: string | null;
+  ownerId?: string | null;
+  parentId?: string | null;
+  timePeriod?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  metricType: "percentage" | "numeric" | "milestone";
+  metricTarget?: number | null;
+  metricCurrent?: number;
+  status: string;
+  weight?: number;
+  progress?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GoalContribution {
+  id: string;
+  goalId: string;
+  projectId?: string | null;
+  portfolioId?: string | null;
+  taskId?: string | null;
+  createdAt: string;
+}
+
+export interface PortfolioExt {
+  id: string;
+  name: string;
+  description?: string | null;
+  color: string;
+  ownerId?: string | null;
+  parentId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  projectIds?: string[];
+}
+
+export interface TeamExt {
+  id: string;
+  name: string;
+  description?: string | null;
+  ownerId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TeamMemberExt {
+  teamId: string;
+  userId: string;
+  role: string;
+  createdAt: string;
+}
+
+export interface ProjectMemberExt {
+  projectId: string;
+  userId: string;
+  role: string;
+  createdAt: string;
+}
+
+export interface TaskProjectLink {
+  taskId: string;
+  projectId: string;
+  sectionId?: string | null;
+  createdAt: string;
+}
+
+export interface TagExt {
+  id: string;
+  name: string;
+  color: string;
+  createdAt: string;
+}
+
+export interface CustomFieldDefExt {
+  id: string;
+  projectId?: string | null;
+  name: string;
+  fieldType:
+    | "text"
+    | "number"
+    | "date"
+    | "single_select"
+    | "multi_select"
+    | "people"
+    | "checkbox"
+    | "formula";
+  options?: { choices?: Array<{ id: string; label: string; color?: string }>; formula?: string } | null;
+  required: boolean;
+  position: number;
+  createdAt: string;
+}
+
+export interface CustomFieldValueExt {
+  id: string;
+  taskId: string;
+  fieldId: string;
+  valueText?: string | null;
+  valueNumber?: number | null;
+  valueDate?: string | null;
+  valueUserId?: string | null;
+  valueSelectIds?: string[] | null;
+  valueBool?: boolean | null;
+  updatedAt: string;
+}
+
+export interface TimeEntry {
+  id: string;
+  taskId: string;
+  userId: string;
+  startedAt: string;
+  endedAt?: string | null;
+  durationMinutes?: number | null;
+  note?: string | null;
+  createdAt: string;
+}
+
+export interface SavedView {
+  id: string;
+  projectId?: string | null;
+  userId?: string | null;
+  name: string;
+  viewType: "list" | "board" | "timeline" | "calendar";
+  filters: FilterSpec[];
+  sort: SortSpec[];
+  groupBy?: string | null;
+  createdAt: string;
+}
+
+export interface FilterSpec {
+  field: string;
+  operator:
+    | "eq" | "neq" | "gt" | "gte" | "lt" | "lte"
+    | "contains" | "starts_with" | "ends_with"
+    | "in" | "not_in" | "is_null" | "is_not_null"
+    | "between";
+  value?: unknown;
+  value2?: unknown;
+}
+
+export interface SortSpec {
+  field: string;
+  direction: "asc" | "desc";
+}
+
+export interface Dashboard {
+  id: string;
+  ownerId?: string | null;
+  scopeId?: string | null;
+  name: string;
+  createdAt: string;
+  widgets?: DashboardWidget[];
+}
+
+export interface DashboardWidget {
+  id: string;
+  dashboardId: string;
+  type: "counter" | "bar" | "line" | "pie" | "burnup" | "list";
+  config: Record<string, unknown>;
+  position: { x: number; y: number; w: number; h: number };
+  createdAt: string;
+}
+
+export interface WebhookSubscription {
+  id: string;
+  userId?: string | null;
+  eventType: string;
+  targetUrl: string;
+  secret?: string | null;
+  enabled: boolean;
+  createdAt: string;
+}
+
+export interface MyTaskSection {
+  id: string;
+  userId: string;
+  name: string;
+  position: number;
+  createdAt: string;
+}
+
+export interface ProjectStatusUpdateExt {
+  id: string;
+  projectId: string;
+  authorId?: string | null;
+  status: string;
+  text?: string | null;
+  createdAt: string;
+}
+
+// ----------------------------------------------
+// AI provider config (stored in localStorage)
+// ----------------------------------------------
+
+export type AIProviderType = "anthropic" | "openai" | "openai_compatible" | "ollama";
+
+export interface AIProviderConfig {
+  id: string;
+  type: AIProviderType;
+  label: string;
+  apiKey?: string;   // not used for ollama / openai_compatible local
+  baseUrl?: string;  // for openai_compatible / ollama
+  model: string;
+  isDefault?: boolean;
+}
+
+export interface AIAppSettings {
+  providers: AIProviderConfig[];
+  defaultProviderId?: string | null;
+  features: {
+    smartSummary: boolean;
+    smartStatus: boolean;
+    smartFields: boolean;
+    smartRuleCreator: boolean;
+    smartChat: boolean;
+  };
+}
+
