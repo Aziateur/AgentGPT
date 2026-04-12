@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { PROJECT_TEMPLATES } from "@/lib/project-templates";
 import { applyProjectTemplate } from "@/lib/project-templates-apply";
 import { useAppStore } from "@/store/app-store";
+import { generateProjectFromPrompt } from "@/lib/ai-generate-project";
 
 // -- Helpers ------------------------------------------------------------------
 
@@ -29,7 +30,7 @@ const statusLabel: Record<ProjectStatusType, string> = {
 
 type SortKey = "name" | "recent" | "status";
 type StatusFilter = "all" | ProjectStatusType;
-type CreateTab = "blank" | "template";
+type CreateTab = "blank" | "template" | "ai";
 
 interface ProjectItem {
   id: string;
@@ -67,6 +68,8 @@ export function ProjectsPageClient({ projects }: { projects: ProjectItem[] }) {
   const [newProjectDesc, setNewProjectDesc] = useState("");
   const [newProjectColor, setNewProjectColor] = useState("#4f46e5");
   const [busy, setBusy] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // Derive latest status for each project from its statuses array
   function getProjectStatus(p: ProjectItem): ProjectStatusType {
@@ -109,6 +112,27 @@ export function ProjectsPageClient({ projects }: { projects: ProjectItem[] }) {
     setNewProjectColor("#4f46e5");
     setSelectedTemplateId(null);
     setCreateTab("blank");
+    setAiPrompt("");
+    setAiError(null);
+  }
+
+  async function handleAiGenerate() {
+    if (!aiPrompt.trim()) return;
+    setBusy(true);
+    setAiError(null);
+    try {
+      const newId = await generateProjectFromPrompt(aiPrompt.trim());
+      if (newId) {
+        resetForm();
+        router.push(`/project/list?id=${newId}`);
+      } else {
+        setAiError("Generation returned no project.");
+      }
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "AI generation failed.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleCreateProject() {
@@ -166,7 +190,7 @@ export function ProjectsPageClient({ projects }: { projects: ProjectItem[] }) {
 
             {/* Tabs */}
             <div className="mb-4 flex items-center gap-1 border-b border-gray-200">
-              {(["blank", "template"] as CreateTab[]).map((t) => (
+              {(["blank", "template", "ai"] as CreateTab[]).map((t) => (
                 <button
                   key={t}
                   onClick={() => setCreateTab(t)}
@@ -174,7 +198,7 @@ export function ProjectsPageClient({ projects }: { projects: ProjectItem[] }) {
                     createTab === t ? "text-indigo-600" : "text-gray-500 hover:text-gray-700"
                   }`}
                 >
-                  {t === "blank" ? "Blank" : "From template"}
+                  {t === "blank" ? "Blank" : t === "template" ? "From template" : "AI"}
                   {createTab === t && (
                     <span className="absolute inset-x-0 -bottom-px h-0.5 bg-indigo-600" />
                   )}
@@ -210,6 +234,33 @@ export function ProjectsPageClient({ projects }: { projects: ProjectItem[] }) {
               </div>
             )}
 
+            {createTab === "ai" && (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
+                  Uses your default AI provider from <span className="font-medium">/settings/ai</span>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Describe the project you want
+                  </label>
+                  <textarea
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    placeholder="e.g. Launch a new mobile app including design, development, QA, and marketing phases."
+                    rows={5}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                    autoFocus
+                  />
+                </div>
+                {aiError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    {aiError}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {createTab !== "ai" && (
             <div className="space-y-3">
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Name</label>
@@ -248,6 +299,7 @@ export function ProjectsPageClient({ projects }: { projects: ProjectItem[] }) {
                 </>
               )}
             </div>
+            )}
             <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={resetForm}
@@ -255,6 +307,18 @@ export function ProjectsPageClient({ projects }: { projects: ProjectItem[] }) {
               >
                 Cancel
               </button>
+              {createTab === "ai" ? (
+                <button
+                  onClick={handleAiGenerate}
+                  disabled={!aiPrompt.trim() || busy || isPending}
+                  className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {busy && (
+                    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  )}
+                  {busy ? "Generating..." : "Generate"}
+                </button>
+              ) : (
               <button
                 onClick={handleCreateProject}
                 disabled={
@@ -267,6 +331,7 @@ export function ProjectsPageClient({ projects }: { projects: ProjectItem[] }) {
               >
                 {busy || isPending ? "Creating..." : "Create Project"}
               </button>
+              )}
             </div>
           </div>
         </div>

@@ -62,6 +62,89 @@ function sameDay(a: Date, b: Date) {
 
 type ViewKey = "list" | "board" | "calendar" | "files" | "dashboard";
 
+type QuickFilterKey =
+  | "incomplete"
+  | "completed"
+  | "due_this_week"
+  | "due_next_week"
+  | "overdue"
+  | "high_priority";
+
+const QUICK_FILTERS: { key: QuickFilterKey; label: string }[] = [
+  { key: "incomplete", label: "Incomplete" },
+  { key: "completed", label: "Completed" },
+  { key: "due_this_week", label: "Due this week" },
+  { key: "due_next_week", label: "Due next week" },
+  { key: "overdue", label: "Overdue" },
+  { key: "high_priority", label: "High priority" },
+];
+
+function applyQuickFilters(tasks: Task[], active: Set<QuickFilterKey>): Task[] {
+  if (active.size === 0) return tasks;
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayEnd = new Date(todayStart.getTime() + 86400000 - 1);
+  const day = todayStart.getDay();
+  const weekStart = new Date(todayStart.getTime() - day * 86400000);
+  const weekEnd = new Date(weekStart.getTime() + 7 * 86400000 - 1);
+  const nextWeekStart = new Date(weekEnd.getTime() + 1);
+  const nextWeekEnd = new Date(nextWeekStart.getTime() + 7 * 86400000 - 1);
+
+  const keys = Array.from(active);
+  return tasks.filter((t) => {
+    for (const k of keys) {
+      if (k === "incomplete" && t.completed) return false;
+      if (k === "completed" && !t.completed) return false;
+      if (k === "due_this_week") {
+        if (!t.dueDate) return false;
+        const d = new Date(t.dueDate);
+        if (d < weekStart || d > weekEnd) return false;
+      }
+      if (k === "due_next_week") {
+        if (!t.dueDate) return false;
+        const d = new Date(t.dueDate);
+        if (d < nextWeekStart || d > nextWeekEnd) return false;
+      }
+      if (k === "overdue") {
+        if (t.completed) return false;
+        if (!t.dueDate) return false;
+        if (new Date(t.dueDate) >= todayEnd) return false;
+      }
+      if (k === "high_priority" && t.priority !== "high") return false;
+    }
+    return true;
+  });
+}
+
+function QuickFilterChipsRow({
+  active,
+  onToggle,
+}: {
+  active: Set<QuickFilterKey>;
+  onToggle: (k: QuickFilterKey) => void;
+}) {
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2">
+      {QUICK_FILTERS.map((f) => {
+        const isActive = active.has(f.key);
+        return (
+          <button
+            key={f.key}
+            onClick={() => onToggle(f.key)}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+              isActive
+                ? "bg-indigo-600 text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            {f.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 const VIEWS: { key: ViewKey; label: string }[] = [
   { key: "list", label: "List" },
   { key: "board", label: "Board" },
@@ -89,9 +172,25 @@ export default function MyTasksPage() {
   const toggleTaskComplete = useAppStore((s) => s.toggleTaskComplete);
   const loading = useAppStore((s) => s.loading);
 
-  const myTasks = useMemo(
+  const rawMyTasks = useMemo(
     () => allTasks.filter((t) => t.assigneeId === currentUser.id),
     [allTasks, currentUser.id]
+  );
+
+  const [quickFilters, setQuickFilters] = useState<Set<QuickFilterKey>>(new Set());
+
+  function toggleQuickFilter(k: QuickFilterKey) {
+    setQuickFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+  }
+
+  const myTasks = useMemo(
+    () => applyQuickFilters(rawMyTasks, quickFilters),
+    [rawMyTasks, quickFilters]
   );
 
   function setView(v: ViewKey) {
@@ -139,6 +238,9 @@ export default function MyTasksPage() {
           </button>
         ))}
       </div>
+
+      {/* Quick filter chips */}
+      <QuickFilterChipsRow active={quickFilters} onToggle={toggleQuickFilter} />
 
       {activeView === "list" && (
         <ListView

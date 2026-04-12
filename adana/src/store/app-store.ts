@@ -1030,7 +1030,9 @@ export const useAppStore = create<AppState>()(
   // -- Helpers --------------------------------------------------------------
 
   getProjectTasks: (projectId) => {
-    return get().tasks.filter((t) => t.projectId === projectId && !t.parentId);
+    return get().tasks.filter(
+      (t) => t.projectId === projectId && !t.parentId && !(t as any).deletedAt
+    );
   },
 
   getProjectSections: (projectId) => {
@@ -1043,7 +1045,9 @@ export const useAppStore = create<AppState>()(
     const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
     const weekEnd = new Date(todayEnd.getTime() + 7 * 86400000);
 
-    const myTasks = get().tasks.filter((t) => t.assigneeId === userId && !t.completed);
+    const myTasks = get().tasks.filter(
+      (t) => t.assigneeId === userId && !t.completed && !(t as any).deletedAt
+    );
 
     const today = myTasks.filter(
       (t) => t.dueDate && new Date(t.dueDate) <= todayEnd && t.taskType !== "recurring"
@@ -1056,7 +1060,13 @@ export const useAppStore = create<AppState>()(
     );
     
     // Example: Use taskType = 'recurring' or priority for the checklist
-    const recurring = get().tasks.filter((t) => t.assigneeId === userId && !t.completed && t.taskType === "recurring");
+    const recurring = get().tasks.filter(
+      (t) =>
+        t.assigneeId === userId &&
+        !t.completed &&
+        t.taskType === "recurring" &&
+        !(t as any).deletedAt
+    );
 
     return { today, upcoming, later, recurring };
   },
@@ -1065,8 +1075,9 @@ export const useAppStore = create<AppState>()(
 
   visibleProjectIds: (): string[] => {
     const uid = get().currentUser.id;
-    if (!uid) return get().projects.map((p) => p.id);
-    const ownerProjects = get().projects.filter((p) => p.creatorId === uid).map((p) => p.id);
+    const alive = get().projects.filter((p) => !(p as any).deletedAt);
+    if (!uid) return alive.map((p) => p.id);
+    const ownerProjects = alive.filter((p) => p.creatorId === uid).map((p) => p.id);
     const memberProjects = get().projectMembers
       .filter((m) => m.userId === uid)
       .map((m) => m.projectId);
@@ -1075,9 +1086,10 @@ export const useAppStore = create<AppState>()(
 
   getVisibleProjects: (): Project[] => {
     const uid = get().currentUser.id;
-    if (!uid) return get().projects;
+    const alive = get().projects.filter((p) => !(p as any).deletedAt);
+    if (!uid) return alive;
     const ids = new Set(get().visibleProjectIds());
-    return get().projects.filter((p) => ids.has(p.id));
+    return alive.filter((p) => ids.has(p.id));
   },
 
   getMyGoals: (): GoalExt[] => {

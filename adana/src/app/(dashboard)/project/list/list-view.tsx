@@ -1,13 +1,98 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { useAppStore } from "@/store/app-store";
 import { TaskDetailPanel } from "@/components/tasks/task-detail-panel";
 import { CreateTaskModal } from "@/components/tasks/create-task-modal";
-import type { Task, Section } from "@/types";
+import type { Task, Section, FilterSpec, SortSpec } from "@/types";
+
+// -- Quick filter chips -------------------------------------------------------
+
+type QuickFilterKey =
+  | "incomplete"
+  | "completed"
+  | "due_this_week"
+  | "due_next_week"
+  | "overdue"
+  | "high_priority";
+
+const QUICK_FILTERS: { key: QuickFilterKey; label: string }[] = [
+  { key: "incomplete", label: "Incomplete" },
+  { key: "completed", label: "Completed" },
+  { key: "due_this_week", label: "Due this week" },
+  { key: "due_next_week", label: "Due next week" },
+  { key: "overdue", label: "Overdue" },
+  { key: "high_priority", label: "High priority" },
+];
+
+function applyQuickFilters(tasks: Task[], active: Set<QuickFilterKey>): Task[] {
+  if (active.size === 0) return tasks;
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayEnd = new Date(todayStart.getTime() + 86400000 - 1);
+  const day = todayStart.getDay();
+  const weekStart = new Date(todayStart.getTime() - day * 86400000);
+  const weekEnd = new Date(weekStart.getTime() + 7 * 86400000 - 1);
+  const nextWeekStart = new Date(weekEnd.getTime() + 1);
+  const nextWeekEnd = new Date(nextWeekStart.getTime() + 7 * 86400000 - 1);
+
+  const keys = Array.from(active);
+  return tasks.filter((t) => {
+    for (const k of keys) {
+      if (k === "incomplete" && t.completed) return false;
+      if (k === "completed" && !t.completed) return false;
+      if (k === "due_this_week") {
+        if (!t.dueDate) return false;
+        const d = new Date(t.dueDate);
+        if (d < weekStart || d > weekEnd) return false;
+      }
+      if (k === "due_next_week") {
+        if (!t.dueDate) return false;
+        const d = new Date(t.dueDate);
+        if (d < nextWeekStart || d > nextWeekEnd) return false;
+      }
+      if (k === "overdue") {
+        if (t.completed) return false;
+        if (!t.dueDate) return false;
+        if (new Date(t.dueDate) >= todayEnd) return false;
+      }
+      if (k === "high_priority" && t.priority !== "high") return false;
+    }
+    return true;
+  });
+}
+
+export function QuickFilterChips({
+  active,
+  onToggle,
+}: {
+  active: Set<QuickFilterKey>;
+  onToggle: (k: QuickFilterKey) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {QUICK_FILTERS.map((f) => {
+        const isActive = active.has(f.key);
+        return (
+          <button
+            key={f.key}
+            onClick={() => onToggle(f.key)}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+              isActive
+                ? "bg-indigo-600 text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            {f.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 // -- Helpers ------------------------------------------------------------------
 
@@ -71,12 +156,17 @@ export default function ProjectListPage() {
     users,
   } = useAppStore();
 
-  const tasks = getProjectTasks(projectId);
+  const rawTasks = getProjectTasks(projectId);
   const sections = getProjectSections(projectId);
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createSectionId, setCreateSectionId] = useState<string | null>(null);
+  const [quickFilters, setQuickFilters] = useState<Set<QuickFilterKey>>(new Set());
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [appliedFilters, setAppliedFilters] = useState<FilterSpec[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [appliedSort, setAppliedSort] = useState<SortSpec[]>([]);
 
   // Listen for global create-task event (header + keyboard shortcut)
   useEffect(() => {
@@ -87,6 +177,34 @@ export default function ProjectListPage() {
     window.addEventListener("adana:create-task", onCreateTask);
     return () => window.removeEventListener("adana:create-task", onCreateTask);
   }, []);
+
+  // Listen for apply-view (saved view) events
+  useEffect(() => {
+    function onApplyView(e: Event) {
+      const detail = (e as CustomEvent).detail as
+        | { filters?: FilterSpec[]; sort?: SortSpec[] }
+        | undefined;
+      if (!detail) return;
+      setAppliedFilters(Array.isArray(detail.filters) ? detail.filters : []);
+      setAppliedSort(Array.isArray(detail.sort) ? detail.sort : []);
+    }
+    window.addEventListener("adana:apply-view", onApplyView);
+    return () => window.removeEventListener("adana:apply-view", onApplyView);
+  }, []);
+
+  function toggleQuickFilter(k: QuickFilterKey) {
+    setQuickFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+  }
+
+  const tasks = useMemo(
+    () => applyQuickFilters(rawTasks, quickFilters),
+    [rawTasks, quickFilters]
+  );
 
   const selectedTask = tasks.find((t) => t.id === selectedTaskId) ?? null;
 
@@ -253,6 +371,10 @@ export default function ProjectListPage() {
                 <Plus className="h-4 w-4" />
                 Add task
               </button>
+            </div>
+
+            <div className="mb-3">
+              <QuickFilterChips active={quickFilters} onToggle={toggleQuickFilter} />
             </div>
 
             <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
