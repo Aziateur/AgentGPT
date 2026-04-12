@@ -15,27 +15,22 @@ import {
   CheckSquare,
   Settings2,
   X,
+  Link2,
+  Copy,
+  Check,
+  Filter,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
-import type { FormFieldType } from "@/types";
+import { useAppStore } from "@/store/app-store";
+import type { FormExt, FormFieldExt, FormFieldType } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Types & config
 // ---------------------------------------------------------------------------
-
-interface BuilderField {
-  id: string;
-  label: string;
-  type: FormFieldType;
-  required: boolean;
-  description: string | null;
-  options: string[] | null;
-  order: number;
-}
 
 const FIELD_TYPE_CONFIG: Record<
   string,
@@ -64,92 +59,25 @@ const addableTypes: FormFieldType[] = [
   "multi_select",
 ];
 
-// ---------------------------------------------------------------------------
-// Mock data
-// ---------------------------------------------------------------------------
-
-const mockFields: BuilderField[] = [
-  {
-    id: "f1",
-    label: "Task Title",
-    type: "text",
-    required: true,
-    description: "Short title for the request",
-    options: null,
-    order: 0,
-  },
-  {
-    id: "f2",
-    label: "Description",
-    type: "paragraph",
-    required: false,
-    description: "Provide more details",
-    options: null,
-    order: 1,
-  },
-  {
-    id: "f3",
-    label: "Priority",
-    type: "single_select",
-    required: true,
-    description: null,
-    options: ["Low", "Medium", "High", "Critical"],
-    order: 2,
-  },
-  {
-    id: "f4",
-    label: "Due Date",
-    type: "date",
-    required: false,
-    description: null,
-    options: null,
-    order: 3,
-  },
-  {
-    id: "f5",
-    label: "Estimated Hours",
-    type: "number",
-    required: false,
-    description: null,
-    options: null,
-    order: 4,
-  },
-];
-
-// Mock submissions
-interface FormSubmissionRow {
-  id: string;
-  submitter: string;
-  submittedAt: string;
-  values: Record<string, string>;
+function slugify(str: string): string {
+  return str
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 40) || "form";
 }
 
-const mockSubmissions: FormSubmissionRow[] = [
-  {
-    id: "sub1",
-    submitter: "alex@example.com",
-    submittedAt: "2026-04-02T10:30:00Z",
-    values: {
-      "Task Title": "Fix broken link on homepage",
-      Description: "The careers link in the footer returns 404.",
-      Priority: "High",
-      "Due Date": "2026-04-10",
-      "Estimated Hours": "2",
-    },
-  },
-  {
-    id: "sub2",
-    submitter: "mia@example.com",
-    submittedAt: "2026-04-01T15:00:00Z",
-    values: {
-      "Task Title": "Add dark mode toggle",
-      Description: "",
-      Priority: "Medium",
-      "Due Date": "2026-04-20",
-      "Estimated Hours": "8",
-    },
-  },
-];
+function randomId(): string {
+  return Math.random().toString(36).slice(2, 8);
+}
+
+function getChoices(field: FormFieldExt): string[] {
+  const opts = field.options as Record<string, unknown> | null | undefined;
+  const arr = opts?.choices;
+  if (Array.isArray(arr)) return arr as string[];
+  return [];
+}
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -164,7 +92,7 @@ function FieldRow({
   isFirst,
   isLast,
 }: {
-  field: BuilderField;
+  field: FormFieldExt;
   onDelete: () => void;
   onEdit: () => void;
   onMoveUp: () => void;
@@ -172,9 +100,9 @@ function FieldRow({
   isFirst: boolean;
   isLast: boolean;
 }) {
+  const choices = getChoices(field);
   return (
     <div className="group flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-3 py-3 transition-colors hover:border-gray-300">
-      {/* Drag handle / reorder */}
       <div className="flex flex-col gap-0.5 shrink-0">
         <button
           onClick={onMoveUp}
@@ -199,37 +127,33 @@ function FieldRow({
         </button>
       </div>
 
-      {/* Icon */}
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500">
-        {FIELD_TYPE_CONFIG[field.type]?.icon}
+        {FIELD_TYPE_CONFIG[field.fieldType]?.icon}
       </div>
 
-      {/* Label & type */}
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-gray-900">{field.label}</p>
         <p className="text-xs text-gray-500">
-          {FIELD_TYPE_CONFIG[field.type]?.label}
+          {FIELD_TYPE_CONFIG[field.fieldType]?.label ?? field.fieldType}
           {field.required && (
             <span className="ml-1.5 text-red-500">* Required</span>
           )}
         </p>
       </div>
 
-      {/* Options preview */}
-      {field.options && field.options.length > 0 && (
+      {choices.length > 0 && (
         <div className="hidden gap-1 sm:flex">
-          {field.options.slice(0, 3).map((opt) => (
+          {choices.slice(0, 3).map((opt) => (
             <Badge key={opt} variant="default">
               {opt}
             </Badge>
           ))}
-          {field.options.length > 3 && (
-            <Badge variant="default">+{field.options.length - 3}</Badge>
+          {choices.length > 3 && (
+            <Badge variant="default">+{choices.length - 3}</Badge>
           )}
         </div>
       )}
 
-      {/* Actions */}
       <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
         <button
           onClick={onEdit}
@@ -250,24 +174,22 @@ function FieldRow({
   );
 }
 
-function PreviewField({ field }: { field: BuilderField }) {
+function PreviewField({ field }: { field: FormFieldExt }) {
+  const choices = getChoices(field);
   return (
     <div className="space-y-1.5">
       <label className="block text-sm font-medium text-gray-700">
         {field.label}
         {field.required && <span className="ml-0.5 text-red-500">*</span>}
       </label>
-      {field.description && (
-        <p className="text-xs text-gray-500">{field.description}</p>
-      )}
-      {field.type === "text" && (
+      {field.fieldType === "text" && (
         <input
           disabled
           className="h-9 w-full rounded-lg border border-gray-300 bg-gray-50 px-3 text-sm"
           placeholder="Enter text..."
         />
       )}
-      {field.type === "paragraph" && (
+      {field.fieldType === "paragraph" && (
         <textarea
           disabled
           rows={3}
@@ -275,7 +197,7 @@ function PreviewField({ field }: { field: BuilderField }) {
           placeholder="Enter details..."
         />
       )}
-      {field.type === "number" && (
+      {field.fieldType === "number" && (
         <input
           disabled
           type="number"
@@ -283,27 +205,27 @@ function PreviewField({ field }: { field: BuilderField }) {
           placeholder="0"
         />
       )}
-      {field.type === "date" && (
+      {field.fieldType === "date" && (
         <input
           disabled
           type="date"
           className="h-9 w-full rounded-lg border border-gray-300 bg-gray-50 px-3 text-sm"
         />
       )}
-      {field.type === "single_select" && (
+      {field.fieldType === "single_select" && (
         <select
           disabled
           className="h-9 w-full rounded-lg border border-gray-300 bg-gray-50 px-3 text-sm text-gray-500"
         >
           <option>Select an option...</option>
-          {field.options?.map((o) => (
+          {choices.map((o) => (
             <option key={o}>{o}</option>
           ))}
         </select>
       )}
-      {field.type === "multi_select" && (
+      {field.fieldType === "multi_select" && (
         <div className="space-y-1">
-          {field.options?.map((o) => (
+          {choices.map((o) => (
             <label key={o} className="flex items-center gap-2 text-sm text-gray-600">
               <input type="checkbox" disabled className="rounded" />
               {o}
@@ -321,76 +243,222 @@ function PreviewField({ field }: { field: BuilderField }) {
 
 type ViewMode = "builder" | "preview" | "submissions";
 
-export function FormBuilder() {
-  const [fields, setFields] = React.useState<BuilderField[]>(mockFields);
-  const [viewMode, setViewMode] = React.useState<ViewMode>("builder");
-  const [editingField, setEditingField] = React.useState<BuilderField | null>(null);
-  const [showAddMenu, setShowAddMenu] = React.useState(false);
+interface FormBuilderProps {
+  formId?: string;
+  projectId: string;
+}
 
-  // Field settings state
+export function FormBuilder({ formId: initialFormId, projectId }: FormBuilderProps) {
+  const forms = useAppStore((s) => s.forms);
+  const formFields = useAppStore((s) => s.formFields);
+  const formSubmissions = useAppStore((s) => s.formSubmissions);
+  const createForm = useAppStore((s) => s.createForm);
+  const updateForm = useAppStore((s) => s.updateForm);
+  const createFormField = useAppStore((s) => s.createFormField);
+  const updateFormField = useAppStore((s) => s.updateFormField);
+  const deleteFormField = useAppStore((s) => s.deleteFormField);
+
+  const [formId, setFormId] = React.useState<string | undefined>(initialFormId);
+  const [viewMode, setViewMode] = React.useState<ViewMode>("builder");
+  const [editingField, setEditingField] = React.useState<FormFieldExt | null>(null);
+  const [showAddMenu, setShowAddMenu] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
+
+  // Field settings modal state
   const [editLabel, setEditLabel] = React.useState("");
   const [editRequired, setEditRequired] = React.useState(false);
-  const [editOptions, setEditOptions] = React.useState<string[]>([]);
+  const [editChoices, setEditChoices] = React.useState<string[]>([]);
   const [newOption, setNewOption] = React.useState("");
+  const [editShowIfFieldId, setEditShowIfFieldId] = React.useState<string>("");
+  const [editShowIfOperator, setEditShowIfOperator] = React.useState<string>("eq");
+  const [editShowIfValue, setEditShowIfValue] = React.useState<string>("");
 
-  const openEdit = (field: BuilderField) => {
+  const form = React.useMemo(
+    () => (formId ? forms.find((f) => f.id === formId) : undefined),
+    [forms, formId]
+  );
+
+  const fields = React.useMemo(
+    () =>
+      formId
+        ? formFields
+            .filter((f) => f.formId === formId)
+            .sort((a, b) => a.position - b.position)
+        : [],
+    [formFields, formId]
+  );
+
+  const submissions = React.useMemo(
+    () => (formId ? formSubmissions.filter((s) => s.formId === formId) : []),
+    [formSubmissions, formId]
+  );
+
+  const openEdit = (field: FormFieldExt) => {
     setEditingField(field);
     setEditLabel(field.label);
     setEditRequired(field.required);
-    setEditOptions(field.options ?? []);
+    setEditChoices(getChoices(field));
     setNewOption("");
+    const showIf = (field.options as Record<string, unknown> | null | undefined)
+      ?.showIf as
+      | { fieldId?: string; operator?: string; value?: string }
+      | undefined;
+    setEditShowIfFieldId(showIf?.fieldId ?? "");
+    setEditShowIfOperator(showIf?.operator ?? "eq");
+    setEditShowIfValue(showIf?.value ?? "");
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editingField || !editLabel.trim()) return;
-    setFields((prev) =>
-      prev.map((f) =>
-        f.id === editingField.id
-          ? { ...f, label: editLabel.trim(), required: editRequired, options: editOptions.length > 0 ? editOptions : null }
-          : f
-      )
-    );
+    const needsChoices =
+      editingField.fieldType === "single_select" ||
+      editingField.fieldType === "multi_select";
+    const options: Record<string, unknown> = {};
+    if (needsChoices && editChoices.length > 0) options.choices = editChoices;
+    if (editShowIfFieldId) {
+      options.showIf = {
+        fieldId: editShowIfFieldId,
+        operator: editShowIfOperator || "eq",
+        value: editShowIfValue,
+      };
+    }
+    await updateFormField(editingField.id, {
+      label: editLabel.trim(),
+      required: editRequired,
+      options: Object.keys(options).length > 0 ? options : null,
+    });
     setEditingField(null);
   };
 
-  const addField = (type: FormFieldType) => {
-    const field: BuilderField = {
-      id: `f-${Date.now()}`,
-      label: FIELD_TYPE_CONFIG[type]?.label + " Field",
-      type,
+  const addField = async (type: FormFieldType) => {
+    if (!formId) return;
+    const options: Record<string, unknown> | null =
+      type === "single_select" || type === "multi_select"
+        ? { choices: ["Option 1", "Option 2"] }
+        : null;
+    await createFormField({
+      formId,
+      label: `${FIELD_TYPE_CONFIG[type]?.label ?? "New"} Field`,
+      fieldType: type,
       required: false,
-      description: null,
-      options: type === "single_select" || type === "multi_select" ? ["Option 1", "Option 2"] : null,
-      order: fields.length,
-    };
-    setFields([...fields, field]);
+      options,
+    });
     setShowAddMenu(false);
   };
 
-  const deleteField = (id: string) => {
-    setFields((prev) => prev.filter((f) => f.id !== id));
+  const handleDeleteField = async (id: string) => {
+    await deleteFormField(id);
   };
 
-  const moveField = (index: number, direction: -1 | 1) => {
-    const next = [...fields];
+  const moveField = async (index: number, direction: -1 | 1) => {
     const target = index + direction;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target], next[index]];
-    setFields(next);
+    if (target < 0 || target >= fields.length) return;
+    const a = fields[index];
+    const b = fields[target];
+    await updateFormField(a.id, { position: b.position });
+    await updateFormField(b.id, { position: a.position });
   };
+
+  const handleCreateForm = async () => {
+    const created = await createForm({
+      title: "Untitled form",
+      description: null,
+      projectId,
+      enabled: false,
+    });
+    setFormId(created.id);
+  };
+
+  const handleTogglePublished = async () => {
+    if (!form) return;
+    if (form.enabled && form.publicSlug) {
+      await updateForm(form.id, { enabled: false });
+      return;
+    }
+    const updates: Partial<FormExt> = { enabled: true };
+    if (!form.publicSlug) {
+      updates.publicSlug = `${slugify(form.title)}-${randomId()}`;
+    }
+    await updateForm(form.id, updates);
+  };
+
+  const handleGenerateSlug = async () => {
+    if (!form) return;
+    await updateForm(form.id, {
+      publicSlug: `${slugify(form.title)}-${randomId()}`,
+    });
+  };
+
+  const publicUrl =
+    typeof window !== "undefined" && form?.publicSlug
+      ? `${window.location.origin}/f/${form.publicSlug}`
+      : form?.publicSlug
+      ? `/f/${form.publicSlug}`
+      : "";
+
+  const handleCopyUrl = async () => {
+    if (!publicUrl) return;
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* noop */
+    }
+  };
+
+  // ---------- Empty (no form yet) ----------
+  if (!formId || !form) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
+        <div className="rounded-full bg-indigo-100 p-4 text-indigo-600">
+          <Pencil className="h-6 w-6" />
+        </div>
+        <h2 className="text-lg font-semibold text-gray-900">
+          No form yet
+        </h2>
+        <p className="max-w-sm text-sm text-gray-500">
+          Create a form to collect submissions that will be turned into tasks
+          in this project.
+        </p>
+        <Button variant="primary" onClick={handleCreateForm}>
+          <Plus className="h-4 w-4" /> Create form
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Form Builder</h2>
-          <p className="text-sm text-gray-500">
-            {fields.length} field{fields.length !== 1 && "s"}
-          </p>
+      <div className="flex flex-col gap-3 border-b border-gray-200 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex-1 min-w-0">
+          <input
+            value={form.title}
+            onChange={(e) => updateForm(form.id, { title: e.target.value })}
+            className="w-full truncate bg-transparent text-lg font-semibold text-gray-900 outline-none focus:ring-0"
+          />
+          <input
+            value={form.description ?? ""}
+            onChange={(e) =>
+              updateForm(form.id, { description: e.target.value })
+            }
+            placeholder="Add a description..."
+            className="w-full truncate bg-transparent text-sm text-gray-500 outline-none focus:ring-0"
+          />
         </div>
         <div className="flex items-center gap-2">
-          {/* View tabs */}
+          <button
+            onClick={handleTogglePublished}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+              form.enabled
+                ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            )}
+          >
+            {form.enabled ? "Published" : "Draft"}
+          </button>
           <div className="flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
             {(
               [
@@ -417,16 +485,52 @@ export function FormBuilder() {
         </div>
       </div>
 
+      {/* Public URL box */}
+      {form.enabled && (
+        <div className="flex items-center gap-2 border-b border-gray-200 bg-indigo-50/50 px-6 py-2.5">
+          <Link2 className="h-4 w-4 shrink-0 text-indigo-500" />
+          {form.publicSlug ? (
+            <>
+              <code className="flex-1 truncate text-xs text-gray-700">
+                {publicUrl}
+              </code>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCopyUrl}
+                icon={
+                  copied ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )
+                }
+              >
+                {copied ? "Copied" : "Copy"}
+              </Button>
+            </>
+          ) : (
+            <>
+              <span className="flex-1 text-xs text-gray-600">
+                No public URL yet.
+              </span>
+              <Button variant="outline" size="sm" onClick={handleGenerateSlug}>
+                Generate link
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
-        {/* Builder view */}
         {viewMode === "builder" && (
           <div className="mx-auto max-w-2xl space-y-2">
             {fields.map((field, idx) => (
               <FieldRow
                 key={field.id}
                 field={field}
-                onDelete={() => deleteField(field.id)}
+                onDelete={() => handleDeleteField(field.id)}
                 onEdit={() => openEdit(field)}
                 onMoveUp={() => moveField(idx, -1)}
                 onMoveDown={() => moveField(idx, 1)}
@@ -435,7 +539,6 @@ export function FormBuilder() {
               />
             ))}
 
-            {/* Add field */}
             <div className="relative">
               <button
                 onClick={() => setShowAddMenu(!showAddMenu)}
@@ -462,16 +565,15 @@ export function FormBuilder() {
           </div>
         )}
 
-        {/* Preview */}
         {viewMode === "preview" && (
           <div className="mx-auto max-w-lg space-y-5 rounded-xl border border-gray-200 bg-white p-6">
             <div className="border-b border-gray-100 pb-4">
               <h3 className="text-lg font-semibold text-gray-900">
-                Request Form
+                {form.title}
               </h3>
-              <p className="text-sm text-gray-500">
-                Fill out this form to submit a request.
-              </p>
+              {form.description && (
+                <p className="text-sm text-gray-500">{form.description}</p>
+              )}
             </div>
             {fields.map((field) => (
               <PreviewField key={field.id} field={field} />
@@ -482,39 +584,45 @@ export function FormBuilder() {
           </div>
         )}
 
-        {/* Submissions */}
         {viewMode === "submissions" && (
           <div className="mx-auto max-w-3xl">
-            {mockSubmissions.length === 0 ? (
+            {submissions.length === 0 ? (
               <div className="rounded-lg border-2 border-dashed border-gray-200 p-12 text-center">
                 <p className="text-sm text-gray-500">No submissions yet.</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {mockSubmissions.map((sub) => (
+                {submissions.map((sub) => (
                   <div
                     key={sub.id}
                     className="rounded-xl border border-gray-200 bg-white p-4"
                   >
                     <div className="mb-3 flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-900">
-                        {sub.submitter}
+                        Submission
                       </span>
                       <span className="text-xs text-gray-400">
                         {new Date(sub.submittedAt).toLocaleString()}
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      {Object.entries(sub.values).map(([key, value]) => (
-                        <div key={key}>
-                          <p className="text-xs font-medium text-gray-500">
-                            {key}
-                          </p>
-                          <p className="text-sm text-gray-800">
-                            {value || "--"}
-                          </p>
-                        </div>
-                      ))}
+                      {fields.map((field) => {
+                        const v = (sub.payload as Record<string, unknown>)[
+                          field.id
+                        ];
+                        return (
+                          <div key={field.id}>
+                            <p className="text-xs font-medium text-gray-500">
+                              {field.label}
+                            </p>
+                            <p className="text-sm text-gray-800">
+                              {v === undefined || v === null || v === ""
+                                ? "--"
+                                : String(v)}
+                            </p>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
@@ -546,25 +654,25 @@ export function FormBuilder() {
             Required field
           </label>
 
-          {(editingField?.type === "single_select" ||
-            editingField?.type === "multi_select") && (
+          {(editingField?.fieldType === "single_select" ||
+            editingField?.fieldType === "multi_select") && (
             <div>
               <p className="mb-2 text-sm font-medium text-gray-700">Options</p>
               <div className="space-y-1.5">
-                {editOptions.map((opt, idx) => (
+                {editChoices.map((opt, idx) => (
                   <div key={idx} className="flex items-center gap-2">
                     <Input
                       value={opt}
                       onChange={(e) => {
-                        const next = [...editOptions];
+                        const next = [...editChoices];
                         next[idx] = e.target.value;
-                        setEditOptions(next);
+                        setEditChoices(next);
                       }}
                       inputSize="sm"
                     />
                     <button
                       onClick={() =>
-                        setEditOptions(editOptions.filter((_, i) => i !== idx))
+                        setEditChoices(editChoices.filter((_, i) => i !== idx))
                       }
                       className="rounded p-1 text-gray-400 hover:text-red-500"
                     >
@@ -580,7 +688,7 @@ export function FormBuilder() {
                     inputSize="sm"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && newOption.trim()) {
-                        setEditOptions([...editOptions, newOption.trim()]);
+                        setEditChoices([...editChoices, newOption.trim()]);
                         setNewOption("");
                       }
                     }}
@@ -590,7 +698,7 @@ export function FormBuilder() {
                     size="sm"
                     onClick={() => {
                       if (newOption.trim()) {
-                        setEditOptions([...editOptions, newOption.trim()]);
+                        setEditChoices([...editChoices, newOption.trim()]);
                         setNewOption("");
                       }
                     }}
@@ -601,6 +709,47 @@ export function FormBuilder() {
               </div>
             </div>
           )}
+
+          {/* Conditional showIf */}
+          <div className="rounded-lg border border-gray-200 p-3">
+            <div className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700">
+              <Filter className="h-3.5 w-3.5" />
+              Show only if...
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <select
+                value={editShowIfFieldId}
+                onChange={(e) => setEditShowIfFieldId(e.target.value)}
+                className="h-8 rounded-md border border-gray-300 px-2 text-xs"
+              >
+                <option value="">(always show)</option>
+                {fields
+                  .filter((f) => f.id !== editingField?.id)
+                  .map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.label}
+                    </option>
+                  ))}
+              </select>
+              <select
+                value={editShowIfOperator}
+                onChange={(e) => setEditShowIfOperator(e.target.value)}
+                disabled={!editShowIfFieldId}
+                className="h-8 rounded-md border border-gray-300 px-2 text-xs disabled:bg-gray-50"
+              >
+                <option value="eq">equals</option>
+                <option value="neq">not equals</option>
+                <option value="contains">contains</option>
+              </select>
+              <Input
+                value={editShowIfValue}
+                onChange={(e) => setEditShowIfValue(e.target.value)}
+                disabled={!editShowIfFieldId}
+                inputSize="sm"
+                placeholder="value"
+              />
+            </div>
+          </div>
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setEditingField(null)}>

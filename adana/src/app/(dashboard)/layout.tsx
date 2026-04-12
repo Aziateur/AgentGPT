@@ -4,6 +4,9 @@ import { useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { useAppStore } from "@/store/app-store";
 import { installRuleEngine } from "@/lib/rules/hook";
+import { ThemeProvider } from "@/components/theme-provider";
+import { CommandPalette } from "@/components/command-palette";
+import { useShortcuts } from "@/hooks/use-shortcuts";
 
 export default function DashboardRootLayout({
   children,
@@ -12,6 +15,8 @@ export default function DashboardRootLayout({
 }) {
   const store = useAppStore();
   const { initialized, loading, currentUser, projects, notifications, init } = store;
+
+  useShortcuts();
 
   useEffect(() => {
     init();
@@ -24,12 +29,14 @@ export default function DashboardRootLayout({
 
   if (!initialized || loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
-          <p className="text-sm text-gray-500">Loading...</p>
+      <ThemeProvider>
+        <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+            <p className="text-sm text-gray-500">Loading...</p>
+          </div>
         </div>
-      </div>
+      </ThemeProvider>
     );
   }
 
@@ -38,13 +45,16 @@ export default function DashboardRootLayout({
   ).length;
 
   return (
-    <DashboardLayout
-      user={currentUser}
-      projects={projects}
-      teams={[]}
-      notificationCount={notificationCount}
-    >
-      {children}
-    </DashboardLayout>
+    <ThemeProvider>
+      <DashboardLayout
+        user={currentUser}
+        projects={projects}
+        teams={[]}
+        notificationCount={notificationCount}
+      >
+        {children}
+      </DashboardLayout>
+      <CommandPalette />
+    </ThemeProvider>
   );
 }

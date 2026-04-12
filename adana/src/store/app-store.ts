@@ -469,6 +469,10 @@ interface AppState {
   loading: boolean;
   error: string | null;
 
+  // Theme
+  theme: "light" | "dark";
+  toggleTheme: () => void;
+
   // Auth
   setCurrentUser: (user: User) => void;
   logout: () => void;
@@ -660,6 +664,10 @@ export const useAppStore = create<AppState>()(
       initialized: false,
       loading: false,
       error: null,
+
+      theme: "light",
+      toggleTheme: () =>
+        set((s) => ({ theme: s.theme === "light" ? "dark" : "light" })),
 
       setCurrentUser: (user) => set({ currentUser: user }),
       logout: () => set({ currentUser: EMPTY_USER }),
@@ -1071,6 +1079,7 @@ export const useAppStore = create<AppState>()(
     currentUser: state.currentUser,
     localGoals: state.localGoals,
     localPortfolios: state.localPortfolios,
+    theme: state.theme,
   }),
 }
 ));

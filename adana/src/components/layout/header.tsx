@@ -66,13 +66,13 @@ function getBreadcrumbLabel(pathname: string): string {
 export function Header() {
   const {
     currentUser,
-    theme,
-    toggleTheme,
     searchQuery,
     setSearchQuery,
     selectedProjectView,
     setProjectView,
   } = useAppStore();
+  const theme = useDataStore((s) => (s as any).theme) ?? "light";
+  const toggleTheme = useDataStore((s) => (s as any).toggleTheme);
 
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -115,6 +115,7 @@ export function Header() {
         >
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
+            id="global-search"
             type="text"
             placeholder="Search..."
             value={searchQuery}

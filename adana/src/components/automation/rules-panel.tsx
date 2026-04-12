@@ -8,16 +8,11 @@ import {
   Pencil,
   ToggleLeft,
   ToggleRight,
-  ChevronRight,
   Clock,
   ArrowRight,
-  FileText,
-  CheckCircle2,
-  AlertTriangle,
-  UserPlus,
-  ArrowRightLeft,
-  Flag,
-  Bell,
+  LayoutTemplate,
+  Sparkles,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatRelativeDate } from "@/lib/utils";
@@ -32,242 +27,66 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { AutomationTrigger, AutomationAction } from "@/types";
+import { useAppStore } from "@/store/app-store";
+import { RULE_TEMPLATES, type RuleTemplate } from "@/lib/rules/templates";
+import { loadAISettings } from "@/lib/ai/settings";
+import { getDefaultProvider } from "@/lib/ai/settings";
+import { smartRule } from "@/lib/ai/features";
+import type { AutomationRuleExt, RuleActionSpec } from "@/types";
 
 // ---------------------------------------------------------------------------
-// Labels & icons
+// Trigger / Action options
 // ---------------------------------------------------------------------------
 
-const TRIGGER_LABELS: Record<AutomationTrigger, string> = {
-  task_added: "Task is added",
-  task_completed: "Task is completed",
-  task_moved_to_section: "Task moved to section",
-  due_date_approaching: "Due date is approaching",
-  status_changed: "Status changes",
-  custom_field_changed: "Custom field changes",
-};
-
-const ACTION_LABELS: Record<AutomationAction, string> = {
-  assign_task: "Assign task to...",
-  set_due_date: "Set due date",
-  move_to_section: "Move to section",
-  add_comment: "Add a comment",
-  mark_complete: "Mark as complete",
-  set_custom_field: "Set custom field",
-  create_subtask: "Create subtask",
-};
-
-const TRIGGER_ICONS: Record<AutomationTrigger, React.ReactNode> = {
-  task_added: <Plus className="h-4 w-4" />,
-  task_completed: <CheckCircle2 className="h-4 w-4" />,
-  task_moved_to_section: <ArrowRightLeft className="h-4 w-4" />,
-  due_date_approaching: <Clock className="h-4 w-4" />,
-  status_changed: <AlertTriangle className="h-4 w-4" />,
-  custom_field_changed: <FileText className="h-4 w-4" />,
-};
-
-// Map DB field names to UI type names
-const TRIGGER_TYPE_MAP: Record<string, AutomationTrigger> = {
-  task_created: "task_added",
-  task_completed: "task_completed",
-  task_moved: "task_moved_to_section",
-  due_date_approaching: "due_date_approaching",
-  assignee_changed: "status_changed",
-  field_changed: "custom_field_changed",
-  // Also support direct UI values
-  task_added: "task_added",
-  task_moved_to_section: "task_moved_to_section",
-  status_changed: "status_changed",
-  custom_field_changed: "custom_field_changed",
-};
-
-const ACTION_TYPE_MAP: Record<string, AutomationAction> = {
-  assign: "assign_task",
-  move_section: "move_to_section",
-  set_field: "set_custom_field",
-  add_comment: "add_comment",
-  mark_complete: "mark_complete",
-  set_priority: "set_custom_field",
-  // Also support direct UI values
-  assign_task: "assign_task",
-  set_due_date: "set_due_date",
-  move_to_section: "move_to_section",
-  set_custom_field: "set_custom_field",
-  create_subtask: "create_subtask",
-};
-
-// Reverse maps for saving to DB
-const TRIGGER_TO_DB: Record<AutomationTrigger, string> = {
-  task_added: "task_created",
-  task_completed: "task_completed",
-  task_moved_to_section: "task_moved",
-  due_date_approaching: "due_date_approaching",
-  status_changed: "assignee_changed",
-  custom_field_changed: "field_changed",
-};
-
-const ACTION_TO_DB: Record<AutomationAction, string> = {
-  assign_task: "assign",
-  set_due_date: "set_field",
-  move_to_section: "move_section",
-  add_comment: "add_comment",
-  mark_complete: "mark_complete",
-  set_custom_field: "set_field",
-  create_subtask: "add_comment",
-};
-
-interface PresetTemplate {
-  id: string;
-  name: string;
-  description: string;
-  trigger: AutomationTrigger;
-  action: AutomationAction;
-  icon: React.ReactNode;
-}
-
-const PRESET_TEMPLATES: PresetTemplate[] = [
-  {
-    id: "preset-1",
-    name: "Auto-assign to...",
-    description: "Automatically assign new tasks to a team member",
-    trigger: "task_added",
-    action: "assign_task",
-    icon: <UserPlus className="h-5 w-5 text-indigo-600" />,
-  },
-  {
-    id: "preset-2",
-    name: "Move completed to Done",
-    description: "Move tasks to the Done section when completed",
-    trigger: "task_completed",
-    action: "move_to_section",
-    icon: <CheckCircle2 className="h-5 w-5 text-green-600" />,
-  },
-  {
-    id: "preset-3",
-    name: "Set priority on due date",
-    description: "Increase priority when due date is approaching",
-    trigger: "due_date_approaching",
-    action: "set_custom_field",
-    icon: <Flag className="h-5 w-5 text-orange-600" />,
-  },
-  {
-    id: "preset-4",
-    name: "Notify on overdue",
-    description: "Add a comment notification when tasks are overdue",
-    trigger: "due_date_approaching",
-    action: "add_comment",
-    icon: <Bell className="h-5 w-5 text-red-600" />,
-  },
+const TRIGGER_OPTIONS: { value: string; label: string }[] = [
+  { value: "task_created", label: "Task is created" },
+  { value: "task_completed", label: "Task is completed" },
+  { value: "task_moved", label: "Task is moved to section" },
+  { value: "due_date_approaching", label: "Due date is approaching" },
+  { value: "assignee_changed", label: "Assignee changes" },
+  { value: "custom_field_changed", label: "Custom field changes" },
+  { value: "comment_added", label: "Comment is added" },
+  { value: "form_submitted", label: "Form is submitted" },
 ];
 
-interface RuleData {
-  id: string;
+const ACTION_OPTIONS: { value: string; label: string }[] = [
+  { value: "assign", label: "Assign to user" },
+  { value: "move_section", label: "Move to section" },
+  { value: "set_priority", label: "Set priority" },
+  { value: "set_due_date", label: "Set due date" },
+  { value: "set_field", label: "Set custom field" },
+  { value: "add_tag", label: "Add tag" },
+  { value: "complete", label: "Mark complete" },
+  { value: "add_subtask", label: "Add subtask" },
+  { value: "notify", label: "Send notification" },
+];
+
+const PRIORITY_OPTIONS = ["low", "medium", "high"];
+
+function triggerLabel(type: string): string {
+  return TRIGGER_OPTIONS.find((o) => o.value === type)?.label ?? type;
+}
+
+function actionLabel(type: string): string {
+  return ACTION_OPTIONS.find((o) => o.value === type)?.label ?? type;
+}
+
+// ---------------------------------------------------------------------------
+// Editor form state
+// ---------------------------------------------------------------------------
+
+type EditorState = {
+  id?: string;
   name: string;
-  active: boolean;
   triggerType: string;
-  triggerConfig: string;
-  actionType: string;
-  actionConfig: string;
-  projectId: string;
-  creatorId: string;
-  _count?: { executions: number };
-  createdAt: string | Date;
-  updatedAt: string | Date;
-}
+  actions: RuleActionSpec[];
+};
 
-interface ExecutionLog {
-  id: string;
-  ruleId: string;
-  success: boolean;
-  details: string | null;
-  createdAt: string | Date;
-  user: { id: string; name: string; avatar: string | null } | null;
-}
-
-// Normalized rule for display
-interface DisplayRule {
-  id: string;
-  name: string;
-  enabled: boolean;
-  trigger: AutomationTrigger;
-  action: AutomationAction;
-  executionCount: number;
-}
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
-
-function RuleRow({
-  rule,
-  onToggle,
-  onEdit,
-  onDelete,
-}: {
-  rule: DisplayRule;
-  onToggle: (id: string) => void;
-  onEdit: (rule: DisplayRule) => void;
-  onDelete: (id: string) => void;
-}) {
-  return (
-    <div
-      className={cn(
-        "group flex items-center gap-4 rounded-lg border border-gray-200 bg-white px-4 py-3 transition-colors hover:border-gray-300",
-        !rule.enabled && "opacity-60"
-      )}
-    >
-      <button
-        onClick={() => onToggle(rule.id)}
-        className="shrink-0 text-gray-400 transition-colors hover:text-indigo-600"
-        aria-label={rule.enabled ? "Disable rule" : "Enable rule"}
-      >
-        {rule.enabled ? (
-          <ToggleRight className="h-6 w-6 text-indigo-600" />
-        ) : (
-          <ToggleLeft className="h-6 w-6" />
-        )}
-      </button>
-
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-gray-900">{rule.name}</p>
-        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500">
-          <span className="flex items-center gap-1">
-            {TRIGGER_ICONS[rule.trigger]}
-            {TRIGGER_LABELS[rule.trigger]}
-          </span>
-          <ArrowRight className="h-3 w-3 text-gray-400" />
-          <span>{ACTION_LABELS[rule.action]}</span>
-        </div>
-      </div>
-
-      <div className="hidden items-center gap-1 text-xs text-gray-500 sm:flex">
-        <Zap className="h-3.5 w-3.5" />
-        {rule.executionCount} runs
-      </div>
-
-      <Badge variant={rule.enabled ? "success" : "default"}>
-        {rule.enabled ? "Active" : "Inactive"}
-      </Badge>
-
-      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        <button
-          onClick={() => onEdit(rule)}
-          className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-          aria-label="Edit rule"
-        >
-          <Pencil className="h-4 w-4" />
-        </button>
-        <button
-          onClick={() => onDelete(rule.id)}
-          className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
-          aria-label="Delete rule"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
-      </div>
-    </div>
-  );
-}
+const EMPTY_EDITOR: EditorState = {
+  name: "",
+  triggerType: "task_created",
+  actions: [{ type: "assign", config: {} }],
+};
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -278,136 +97,195 @@ interface RulesPanelProps {
 }
 
 export function RulesPanel({ projectId }: RulesPanelProps) {
-  const [rules, setRules] = React.useState<DisplayRule[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [showCreate, setShowCreate] = React.useState(false);
-  const [showHistory, setShowHistory] = React.useState(false);
-  const [editingRule, setEditingRule] = React.useState<DisplayRule | null>(null);
-  const [executionLogs, setExecutionLogs] = React.useState<ExecutionLog[]>([]);
+  const rules = useAppStore((s) =>
+    s.rules.filter((r) => r.projectId === projectId)
+  );
+  const ruleIds = React.useMemo(() => rules.map((r) => r.id), [rules]);
+  const allExecutions = useAppStore((s) => s.ruleExecutions);
+  const executions = React.useMemo(
+    () =>
+      allExecutions
+        .filter((e) => ruleIds.includes(e.ruleId))
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(b.executedAt).getTime() - new Date(a.executedAt).getTime()
+        )
+        .slice(0, 20),
+    [allExecutions, ruleIds]
+  );
 
-  // Create form state
-  const [newName, setNewName] = React.useState("");
-  const [newTrigger, setNewTrigger] = React.useState<AutomationTrigger>("task_added");
-  const [newAction, setNewAction] = React.useState<AutomationAction>("assign_task");
+  const users = useAppStore((s) => s.users);
+  const allSections = useAppStore((s) => s.sections);
+  const sections = React.useMemo(
+    () => allSections.filter((sec) => sec.projectId === projectId),
+    [allSections, projectId]
+  );
+  const tags = useAppStore((s) => s.tags);
 
-  const loadRules = React.useCallback(async () => {
-    try {
-      const { getRules } = await import("@/app/actions/automation-actions");
-      const data = await getRules(projectId);
-      const display: DisplayRule[] = (data as RuleData[]).map((r) => ({
-        id: r.id,
-        name: r.name,
-        enabled: r.active,
-        trigger: TRIGGER_TYPE_MAP[r.triggerType] || "task_added",
-        action: ACTION_TYPE_MAP[r.actionType] || "assign_task",
-        executionCount: r._count?.executions || 0,
-      }));
-      setRules(display);
-    } catch {
-      // keep empty
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
+  const createRule = useAppStore((s) => s.createRule);
+  const updateRule = useAppStore((s) => s.updateRule);
+  const deleteRule = useAppStore((s) => s.deleteRule);
+  const toggleRule = useAppStore((s) => s.toggleRule);
+
+  const [editorOpen, setEditorOpen] = React.useState(false);
+  const [editor, setEditor] = React.useState<EditorState>(EMPTY_EDITOR);
+  const [templatesOpen, setTemplatesOpen] = React.useState(false);
+
+  // AI smart-rule
+  const [aiEnabled, setAiEnabled] = React.useState(false);
+  const [aiText, setAiText] = React.useState("");
+  const [aiLoading, setAiLoading] = React.useState(false);
+  const [aiError, setAiError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    loadRules();
-  }, [loadRules]);
-
-  const handleToggle = async (id: string) => {
-    // Optimistic update
-    setRules((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r))
-    );
-    const { toggleRule } = await import("@/app/actions/automation-actions");
-    const result = await toggleRule(id);
-    if (result.error) {
-      // Revert
-      loadRules();
+    try {
+      const settings = loadAISettings();
+      setAiEnabled(!!settings.features?.smartRuleCreator);
+    } catch {
+      setAiEnabled(false);
     }
+  }, []);
+
+  // ---------- Editor helpers ----------
+  const openNew = () => {
+    setEditor(EMPTY_EDITOR);
+    setAiText("");
+    setAiError(null);
+    setEditorOpen(true);
+  };
+
+  const openEdit = (rule: AutomationRuleExt) => {
+    setEditor({
+      id: rule.id,
+      name: rule.name,
+      triggerType: rule.triggerType,
+      actions:
+        rule.actions && rule.actions.length
+          ? rule.actions.map((a) => ({ ...a, config: { ...(a.config || {}) } }))
+          : [{ type: "assign", config: {} }],
+    });
+    setAiText("");
+    setAiError(null);
+    setEditorOpen(true);
+  };
+
+  const closeEditor = () => {
+    setEditorOpen(false);
+    setEditor(EMPTY_EDITOR);
+  };
+
+  const updateAction = (idx: number, patch: Partial<RuleActionSpec>) => {
+    setEditor((prev) => ({
+      ...prev,
+      actions: prev.actions.map((a, i) => (i === idx ? { ...a, ...patch } : a)),
+    }));
+  };
+
+  const updateActionConfig = (idx: number, patch: Record<string, unknown>) => {
+    setEditor((prev) => ({
+      ...prev,
+      actions: prev.actions.map((a, i) =>
+        i === idx ? { ...a, config: { ...(a.config || {}), ...patch } } : a
+      ),
+    }));
+  };
+
+  const changeActionType = (idx: number, type: string) => {
+    setEditor((prev) => ({
+      ...prev,
+      actions: prev.actions.map((a, i) =>
+        i === idx ? { type, config: {} } : a
+      ),
+    }));
+  };
+
+  const addAction = () => {
+    setEditor((prev) => ({
+      ...prev,
+      actions: [...prev.actions, { type: "assign", config: {} }],
+    }));
+  };
+
+  const removeAction = (idx: number) => {
+    setEditor((prev) => ({
+      ...prev,
+      actions:
+        prev.actions.length === 1
+          ? prev.actions
+          : prev.actions.filter((_, i) => i !== idx),
+    }));
+  };
+
+  const applyTemplate = (tpl: RuleTemplate) => {
+    setEditor({
+      name: tpl.rule.name,
+      triggerType: tpl.rule.triggerType,
+      actions: (tpl.rule.actions || []).map((a) => ({
+        ...a,
+        config: { ...(a.config || {}) },
+      })),
+    });
+    setTemplatesOpen(false);
+    setEditorOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!editor.name.trim()) return;
+    if (editor.id) {
+      await updateRule(editor.id, {
+        name: editor.name.trim(),
+        triggerType: editor.triggerType,
+        actions: editor.actions,
+      });
+    } else {
+      await createRule({
+        name: editor.name.trim(),
+        triggerType: editor.triggerType,
+        triggerConfig: {},
+        actions: editor.actions,
+        projectId,
+        scope: "project",
+      });
+    }
+    closeEditor();
   };
 
   const handleDelete = async (id: string) => {
-    setRules((prev) => prev.filter((r) => r.id !== id));
-    const { deleteRule } = await import("@/app/actions/automation-actions");
-    const result = await deleteRule(id);
-    if (result.error) {
-      loadRules();
-    }
+    await deleteRule(id);
   };
 
-  const handleCreate = async () => {
-    if (!newName.trim()) return;
-
-    if (editingRule) {
-      // Update existing rule
-      const { updateRule } = await import("@/app/actions/automation-actions");
-      await updateRule(editingRule.id, {
-        name: newName || editingRule.name,
-        triggerType: TRIGGER_TO_DB[newTrigger],
-        triggerConfig: {},
-        actionType: ACTION_TO_DB[newAction],
-        actionConfig: {},
+  const handleSmartRule = async () => {
+    if (!aiText.trim()) return;
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const provider = getDefaultProvider();
+      if (!provider) {
+        setAiError("No AI provider configured. Open Settings to add one.");
+        return;
+      }
+      const result = await smartRule(provider, aiText.trim());
+      setEditor({
+        name: result.name,
+        triggerType: result.triggerType,
+        actions:
+          Array.isArray(result.actions) && result.actions.length
+            ? result.actions.map((a: any) => ({
+                type: String(a.type || "assign"),
+                config: a.config && typeof a.config === "object" ? a.config : {},
+                condition: a.condition,
+              }))
+            : [{ type: "assign", config: {} }],
       });
-      setEditingRule(null);
-    } else {
-      // Create new rule
-      const { createRule } = await import("@/app/actions/automation-actions");
-      await createRule({
-        name: newName,
-        projectId,
-        triggerType: TRIGGER_TO_DB[newTrigger],
-        triggerConfig: {},
-        actionType: ACTION_TO_DB[newAction],
-        actionConfig: {},
-      });
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAiLoading(false);
     }
-
-    setNewName("");
-    setNewTrigger("task_added");
-    setNewAction("assign_task");
-    setShowCreate(false);
-    loadRules();
   };
 
-  const handleShowHistory = async () => {
-    setShowHistory(true);
-    // Load execution history for all rules in this project
-    const { getRuleExecutions } = await import("@/app/actions/automation-actions");
-    const allLogs: ExecutionLog[] = [];
-    for (const rule of rules) {
-      const logs = await getRuleExecutions(rule.id);
-      allLogs.push(...(logs as ExecutionLog[]));
-    }
-    allLogs.sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-    setExecutionLogs(allLogs);
-  };
-
-  const handleApplyPreset = (preset: PresetTemplate) => {
-    setNewName(preset.name);
-    setNewTrigger(preset.trigger);
-    setNewAction(preset.action);
-    setShowCreate(true);
-  };
-
-  const handleEdit = (rule: DisplayRule) => {
-    setNewName(rule.name);
-    setNewTrigger(rule.trigger);
-    setNewAction(rule.action);
-    setEditingRule(rule);
-    setShowCreate(true);
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
-      </div>
-    );
-  }
+  // ---------- Render ----------
 
   return (
     <div className="flex h-full flex-col">
@@ -419,51 +297,32 @@ export function RulesPanel({ projectId }: RulesPanelProps) {
           <Badge variant="default">{rules.length}</Badge>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={handleShowHistory}>
-            <Clock className="h-4 w-4" />
-            History
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setTemplatesOpen(true)}
+          >
+            <LayoutTemplate className="h-4 w-4" />
+            Templates
           </Button>
-          <Button variant="primary" size="sm" onClick={() => setShowCreate(true)}>
+          <Button variant="primary" size="sm" onClick={openNew}>
             <Plus className="h-4 w-4" />
-            Create Rule
+            New rule
           </Button>
         </div>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
-        {/* Preset templates */}
-        <div className="mb-6">
-          <h3 className="mb-3 text-sm font-medium text-gray-700">Quick Templates</h3>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {PRESET_TEMPLATES.map((preset) => (
-              <button
-                key={preset.id}
-                onClick={() => handleApplyPreset(preset)}
-                className="flex items-center gap-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2.5 text-left transition-colors hover:border-indigo-300 hover:bg-indigo-50"
-              >
-                <div className="shrink-0 rounded-lg bg-white p-2 shadow-sm">
-                  {preset.icon}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-900">{preset.name}</p>
-                  <p className="truncate text-xs text-gray-500">{preset.description}</p>
-                </div>
-                <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-gray-400" />
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Rules list */}
-        <div>
-          <h3 className="mb-3 text-sm font-medium text-gray-700">Active Rules</h3>
+        <div className="mb-8">
+          <h3 className="mb-3 text-sm font-medium text-gray-700">Rules</h3>
           {rules.length === 0 ? (
             <div className="rounded-lg border-2 border-dashed border-gray-200 p-8 text-center">
               <Zap className="mx-auto mb-2 h-8 w-8 text-gray-300" />
               <p className="text-sm text-gray-500">No automation rules yet.</p>
               <p className="text-xs text-gray-400">
-                Create a rule or pick a template to get started.
+                Create a rule or start from a template.
               </p>
             </div>
           ) : (
@@ -472,146 +331,510 @@ export function RulesPanel({ projectId }: RulesPanelProps) {
                 <RuleRow
                   key={rule.id}
                   rule={rule}
-                  onToggle={handleToggle}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
+                  onToggle={() => toggleRule(rule.id)}
+                  onEdit={() => openEdit(rule)}
+                  onDelete={() => handleDelete(rule.id)}
                 />
               ))}
             </div>
           )}
         </div>
+
+        {/* Executions log */}
+        <div>
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-gray-700">
+            <Clock className="h-4 w-4" />
+            Recent executions
+          </h3>
+          {executions.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-gray-200 p-6 text-center text-xs text-gray-400">
+              No executions yet.
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {executions.map((e) => {
+                const rule = rules.find((r) => r.id === e.ruleId);
+                return (
+                  <div
+                    key={e.id}
+                    className="flex items-center gap-3 rounded-md border border-gray-100 bg-gray-50 px-3 py-2 text-sm"
+                  >
+                    <Badge
+                      variant={
+                        e.status === "success"
+                          ? "success"
+                          : e.status === "failed"
+                          ? "high"
+                          : "default"
+                      }
+                    >
+                      {e.status}
+                    </Badge>
+                    <span className="min-w-0 flex-1 truncate text-gray-900">
+                      {rule?.name ?? "(deleted rule)"}
+                      {e.log ? (
+                        <span className="ml-2 text-xs text-gray-500">
+                          - {e.log}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="shrink-0 text-xs text-gray-400">
+                      {formatRelativeDate(e.executedAt)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Create / Edit Modal */}
+      {/* Editor Modal */}
       <Modal
-        open={showCreate || editingRule !== null}
-        onClose={() => {
-          setShowCreate(false);
-          setEditingRule(null);
-          setNewName("");
-          setNewTrigger("task_added");
-          setNewAction("assign_task");
-        }}
-        title={editingRule ? "Edit Rule" : "Create Automation Rule"}
+        open={editorOpen}
+        onClose={closeEditor}
+        title={editor.id ? "Edit rule" : "New rule"}
         size="lg"
       >
         <div className="space-y-4">
+          {aiEnabled && (
+            <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3">
+              <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-indigo-900">
+                <Sparkles className="h-3.5 w-3.5" />
+                Describe in plain English
+              </label>
+              <textarea
+                value={aiText}
+                onChange={(e) => setAiText(e.target.value)}
+                placeholder="e.g. When a task is completed, move it to Done and notify the creator"
+                className="w-full rounded-md border border-indigo-200 bg-white px-2 py-1.5 text-sm placeholder-gray-400 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                rows={2}
+              />
+              <div className="mt-2 flex items-center justify-between gap-2">
+                {aiError ? (
+                  <span className="text-xs text-red-600">{aiError}</span>
+                ) : (
+                  <span className="text-xs text-gray-500">
+                    AI will pre-fill the form below.
+                  </span>
+                )}
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={handleSmartRule}
+                  disabled={aiLoading || !aiText.trim()}
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {aiLoading ? "Generating..." : "Generate"}
+                </Button>
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">
-              Rule Name
+              Name
             </label>
             <Input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="e.g. Auto-assign to Sarah"
+              value={editor.name}
+              onChange={(e) =>
+                setEditor((prev) => ({ ...prev, name: e.target.value }))
+              }
+              placeholder="e.g. Auto-assign new tasks"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                When this happens...
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              When this happens
+            </label>
+            <Select
+              value={editor.triggerType}
+              onValueChange={(v) =>
+                setEditor((prev) => ({ ...prev, triggerType: v }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TRIGGER_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <label className="text-sm font-medium text-gray-700">
+                Then do
               </label>
-              <Select
-                value={newTrigger}
-                onValueChange={(v) => setNewTrigger(v as AutomationTrigger)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(TRIGGER_LABELS) as AutomationTrigger[]).map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {TRIGGER_LABELS[t]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Button size="sm" variant="ghost" onClick={addAction}>
+                <Plus className="h-3.5 w-3.5" />
+                Add action
+              </Button>
             </div>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Do this...
-              </label>
-              <Select
-                value={newAction}
-                onValueChange={(v) => setNewAction(v as AutomationAction)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(ACTION_LABELS) as AutomationAction[]).map((a) => (
-                    <SelectItem key={a} value={a}>
-                      {ACTION_LABELS[a]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="space-y-2">
+              {editor.actions.map((action, idx) => (
+                <ActionEditor
+                  key={idx}
+                  action={action}
+                  users={users}
+                  sections={sections}
+                  tags={tags}
+                  onChangeType={(t) => changeActionType(idx, t)}
+                  onChangeConfig={(patch) => updateActionConfig(idx, patch)}
+                  onRemove={
+                    editor.actions.length > 1 ? () => removeAction(idx) : undefined
+                  }
+                />
+              ))}
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowCreate(false);
-                setEditingRule(null);
-                setNewName("");
-                setNewTrigger("task_added");
-                setNewAction("assign_task");
-              }}
-            >
+          <div className="flex justify-end gap-2 border-t border-gray-100 pt-3">
+            <Button variant="outline" onClick={closeEditor}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={handleCreate}>
-              {editingRule ? "Save Changes" : "Create Rule"}
+            <Button
+              variant="primary"
+              onClick={handleSave}
+              disabled={!editor.name.trim()}
+            >
+              {editor.id ? "Save changes" : "Create rule"}
             </Button>
           </div>
         </div>
       </Modal>
 
-      {/* Execution History Modal */}
+      {/* Templates Modal */}
       <Modal
-        open={showHistory}
-        onClose={() => setShowHistory(false)}
-        title="Execution History"
+        open={templatesOpen}
+        onClose={() => setTemplatesOpen(false)}
+        title="Rule templates"
         size="lg"
       >
-        <div className="max-h-96 space-y-2 overflow-y-auto">
-          {executionLogs.length === 0 ? (
-            <div className="py-8 text-center text-sm text-gray-400">
-              No execution history yet.
-            </div>
-          ) : (
-            executionLogs.map((log) => (
-              <div
-                key={log.id}
-                className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5"
-              >
-                <div
-                  className={cn(
-                    "h-2 w-2 shrink-0 rounded-full",
-                    log.success ? "bg-green-500" : "bg-red-500"
-                  )}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-gray-900">
-                    <span className="font-medium">
-                      {log.user?.name || "System"}
-                    </span>
-                    <span className="text-gray-500"> - </span>
-                    <span>{log.details || "No details"}</span>
-                  </p>
-                </div>
-                <span className="shrink-0 text-xs text-gray-400">
-                  {formatRelativeDate(log.createdAt)}
+        <div className="grid max-h-[70vh] grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
+          {RULE_TEMPLATES.map((tpl) => (
+            <button
+              key={tpl.name}
+              onClick={() => applyTemplate(tpl)}
+              className="flex flex-col gap-1.5 rounded-lg border border-gray-200 bg-white p-3 text-left transition-colors hover:border-indigo-300 hover:bg-indigo-50/40"
+            >
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4 shrink-0 text-indigo-600" />
+                <p className="text-sm font-medium text-gray-900">{tpl.name}</p>
+              </div>
+              <p className="text-xs text-gray-500">{tpl.description}</p>
+              <div className="mt-1 flex items-center gap-1 text-xs text-gray-400">
+                <span>{triggerLabel(tpl.rule.triggerType)}</span>
+                <ArrowRight className="h-3 w-3" />
+                <span>
+                  {tpl.rule.actions
+                    .map((a) => actionLabel(a.type))
+                    .join(", ")}
                 </span>
               </div>
-            ))
-          )}
+            </button>
+          ))}
         </div>
       </Modal>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// RuleRow
+// ---------------------------------------------------------------------------
+
+function RuleRow({
+  rule,
+  onToggle,
+  onEdit,
+  onDelete,
+}: {
+  rule: AutomationRuleExt;
+  onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "group flex items-center gap-4 rounded-lg border border-gray-200 bg-white px-4 py-3 transition-colors hover:border-gray-300",
+        !rule.enabled && "opacity-60"
+      )}
+    >
+      <button
+        onClick={onToggle}
+        className="shrink-0 text-gray-400 transition-colors hover:text-indigo-600"
+        aria-label={rule.enabled ? "Disable rule" : "Enable rule"}
+      >
+        {rule.enabled ? (
+          <ToggleRight className="h-6 w-6 text-indigo-600" />
+        ) : (
+          <ToggleLeft className="h-6 w-6" />
+        )}
+      </button>
+
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-gray-900">
+          {rule.name}
+        </p>
+        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500">
+          <span>{triggerLabel(rule.triggerType)}</span>
+          <ArrowRight className="h-3 w-3 text-gray-400" />
+          <span className="truncate">
+            {(rule.actions || [])
+              .map((a) => actionLabel(a.type))
+              .join(", ") || "(no actions)"}
+          </span>
+        </div>
+      </div>
+
+      <Badge variant={rule.enabled ? "success" : "default"}>
+        {rule.enabled ? "Active" : "Inactive"}
+      </Badge>
+
+      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <button
+          onClick={onEdit}
+          className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+          aria-label="Edit rule"
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
+        <button
+          onClick={onDelete}
+          className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+          aria-label="Delete rule"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ActionEditor
+// ---------------------------------------------------------------------------
+
+interface ActionEditorProps {
+  action: RuleActionSpec;
+  users: { id: string; name: string }[];
+  sections: { id: string; name: string }[];
+  tags: { id: string; name: string }[];
+  onChangeType: (type: string) => void;
+  onChangeConfig: (patch: Record<string, unknown>) => void;
+  onRemove?: () => void;
+}
+
+function ActionEditor({
+  action,
+  users,
+  sections,
+  tags,
+  onChangeType,
+  onChangeConfig,
+  onRemove,
+}: ActionEditorProps) {
+  const config = (action.config || {}) as Record<string, unknown>;
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-3">
+      <div className="flex items-start gap-2">
+        <div className="flex-1">
+          <Select value={action.type} onValueChange={onChangeType}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ACTION_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {onRemove && (
+          <button
+            onClick={onRemove}
+            className="mt-1 shrink-0 rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-200 hover:text-red-600"
+            aria-label="Remove action"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      <div className="mt-2 space-y-2">
+        {action.type === "assign" && (
+          <Select
+            value={(config.userId as string) ?? ""}
+            onValueChange={(v) => onChangeConfig({ userId: v })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select user..." />
+            </SelectTrigger>
+            <SelectContent>
+              {users.map((u) => (
+                <SelectItem key={u.id} value={u.id}>
+                  {u.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {action.type === "move_section" && (
+          <Select
+            value={(config.sectionId as string) ?? ""}
+            onValueChange={(v) => onChangeConfig({ sectionId: v })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select section..." />
+            </SelectTrigger>
+            <SelectContent>
+              {sections.length === 0 ? (
+                <SelectItem value="__none" disabled>
+                  No sections in this project
+                </SelectItem>
+              ) : (
+                sections.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+        )}
+
+        {action.type === "set_priority" && (
+          <Select
+            value={(config.priority as string) ?? ""}
+            onValueChange={(v) => onChangeConfig({ priority: v })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select priority..." />
+            </SelectTrigger>
+            <SelectContent>
+              {PRIORITY_OPTIONS.map((p) => (
+                <SelectItem key={p} value={p}>
+                  {p}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {action.type === "set_due_date" && (
+          <Input
+            type="number"
+            value={
+              typeof config.offsetDays === "number"
+                ? String(config.offsetDays)
+                : ""
+            }
+            onChange={(e) =>
+              onChangeConfig({
+                offsetDays:
+                  e.target.value === "" ? undefined : Number(e.target.value),
+              })
+            }
+            placeholder="Days from today (e.g. 7)"
+          />
+        )}
+
+        {action.type === "add_tag" && (
+          <Select
+            value={(config.tagId as string) ?? ""}
+            onValueChange={(v) => onChangeConfig({ tagId: v })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select tag..." />
+            </SelectTrigger>
+            <SelectContent>
+              {tags.length === 0 ? (
+                <SelectItem value="__none" disabled>
+                  No tags available
+                </SelectItem>
+              ) : (
+                tags.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+        )}
+
+        {action.type === "add_subtask" && (
+          <Input
+            value={(config.title as string) ?? ""}
+            onChange={(e) => onChangeConfig({ title: e.target.value })}
+            placeholder="Subtask title"
+          />
+        )}
+
+        {action.type === "notify" && (
+          <div className="space-y-2">
+            <Select
+              value={(config.userId as string) ?? ""}
+              onValueChange={(v) => onChangeConfig({ userId: v })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Notify user..." />
+              </SelectTrigger>
+              <SelectContent>
+                {users.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              value={(config.title as string) ?? ""}
+              onChange={(e) => onChangeConfig({ title: e.target.value })}
+              placeholder="Notification title"
+            />
+            <Input
+              value={(config.message as string) ?? ""}
+              onChange={(e) => onChangeConfig({ message: e.target.value })}
+              placeholder="Message"
+            />
+          </div>
+        )}
+
+        {action.type === "set_field" && (
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              value={(config.fieldId as string) ?? ""}
+              onChange={(e) => onChangeConfig({ fieldId: e.target.value })}
+              placeholder="Field ID"
+            />
+            <Input
+              value={(config.value as string) ?? ""}
+              onChange={(e) => onChangeConfig({ value: e.target.value })}
+              placeholder="Value"
+            />
+          </div>
+        )}
+
+        {action.type === "complete" && (
+          <p className="text-xs text-gray-500">
+            No configuration needed — task will be marked complete.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
