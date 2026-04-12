@@ -719,46 +719,78 @@ export function TaskDetailPanel({
             />
           </div>
 
-          {/* Dependencies */}
+          {/* Tags (enhanced) */}
           <div className="mb-6">
-            <button
-              onClick={() => setShowDeps(!showDeps)}
-              className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-gray-500"
-            >
-              {showDeps ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-              Dependencies
-            </button>
-            {showDeps && (
-              <div className="space-y-2">
-                {(blockedBy as Array<{ id: string; blockingTask?: { id: string; title: string; completed: boolean } }>).map((dep) => (
-                  <div key={dep.id} className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2">
-                    <Link2 className="h-3.5 w-3.5 text-gray-400" />
-                    <span className="text-xs text-gray-500">blocked by</span>
-                    <span className={`flex-1 text-sm ${dep.blockingTask?.completed ? "text-gray-400 line-through" : "text-gray-900"}`}>
-                      {dep.blockingTask?.title || "Unknown task"}
-                    </span>
-                  </div>
-                ))}
-                {(blocking as Array<{ id: string; blockedTask?: { id: string; title: string; completed: boolean } }>).map((dep) => (
-                  <div key={dep.id} className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2">
-                    <Link2 className="h-3.5 w-3.5 text-gray-400" />
-                    <span className="text-xs text-gray-500">blocking</span>
-                    <span className={`flex-1 text-sm ${dep.blockedTask?.completed ? "text-gray-400 line-through" : "text-gray-900"}`}>
-                      {dep.blockedTask?.title || "Unknown task"}
-                    </span>
-                  </div>
-                ))}
-                {blockedBy.length === 0 && blocking.length === 0 && (
-                  <p className="text-xs text-gray-400">No dependencies</p>
-                )}
-                <button className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600">
-                  <Plus className="h-3 w-3" /> Add dependency
-                </button>
-              </div>
-            )}
+            <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <Tag className="h-3.5 w-3.5" /> Tags
+            </h3>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {currentTaskTags.map((t) => (
+                <span
+                  key={t.id}
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+                  style={{ backgroundColor: `${t.color}20`, color: t.color }}
+                >
+                  {t.name}
+                  <button
+                    onClick={() => handleRemoveTag(t.id)}
+                    className="rounded-full hover:bg-black/10"
+                    aria-label={`Remove ${t.name}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+              {currentTaskTags.length === 0 && (
+                <span className="text-xs text-gray-400">No tags</span>
+              )}
+            </div>
+            <div className="relative mt-2">
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => {
+                  setTagInput(e.target.value);
+                  setShowTagSuggestions(true);
+                }}
+                onFocus={() => setShowTagSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowTagSuggestions(false), 150)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddTagByName(tagInput);
+                  } else if (e.key === "Escape") {
+                    setTagInput("");
+                    setShowTagSuggestions(false);
+                  }
+                }}
+                placeholder="Add a tag... (Enter to create)"
+                className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 placeholder:text-gray-400 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              />
+              {showTagSuggestions && tagSuggestions.length > 0 && (
+                <div className="absolute z-20 mt-1 w-full rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                  {tagSuggestions.map((t) => (
+                    <button
+                      key={t.id}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleAddExistingTag(t.id);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ backgroundColor: t.color }}
+                      />
+                      {t.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Custom Fields */}
+          {/* Custom Fields (enhanced) */}
           <div className="mb-6">
             <button
               onClick={() => setShowCustomFields(!showCustomFields)}
@@ -768,21 +800,526 @@ export function TaskDetailPanel({
               Custom Fields
             </button>
             {showCustomFields && (
-              <div className="space-y-2 text-sm text-gray-500">
-                {(customValues as Array<{ id: string; value?: string | null; field?: { name: string } }>).map((cv) => (
-                  <div key={cv.id} className="flex items-center gap-3">
-                    <span className="w-24 text-xs">{cv.field?.name || "Field"}</span>
-                    <span className="text-gray-900">{cv.value || "---"}</span>
-                  </div>
-                ))}
-                {customValues.length === 0 && (
-                  <p className="text-xs text-gray-400">No custom fields</p>
+              <div className="space-y-2">
+                {projectCustomFields.length === 0 && (
+                  <p className="text-xs text-gray-400">No custom fields defined for this project</p>
                 )}
-                <button className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600">
-                  <Plus className="h-3 w-3" /> Add field
-                </button>
+                {projectCustomFields.map((def) => {
+                  const val = customValueByField.get(def.id);
+                  const choices = def.options?.choices || [];
+                  return (
+                    <div key={def.id} className="flex items-start gap-3">
+                      <span className="mt-1.5 w-24 shrink-0 text-xs text-gray-500">{def.name}</span>
+                      <div className="min-w-0 flex-1">
+                        {def.fieldType === "text" && (
+                          <input
+                            type="text"
+                            defaultValue={val?.valueText ?? ""}
+                            onBlur={(e) =>
+                              handleCustomFieldChange(def, { valueText: e.target.value || null })
+                            }
+                            className="w-full rounded-lg border border-gray-200 px-2 py-1 text-sm text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                          />
+                        )}
+                        {def.fieldType === "number" && (
+                          <input
+                            type="number"
+                            defaultValue={val?.valueNumber ?? ""}
+                            onBlur={(e) =>
+                              handleCustomFieldChange(def, {
+                                valueNumber: e.target.value === "" ? null : Number(e.target.value),
+                              })
+                            }
+                            className="w-full rounded-lg border border-gray-200 px-2 py-1 text-sm text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                          />
+                        )}
+                        {def.fieldType === "date" && (
+                          <input
+                            type="date"
+                            defaultValue={val?.valueDate ? val.valueDate.slice(0, 10) : ""}
+                            onBlur={(e) =>
+                              handleCustomFieldChange(def, { valueDate: e.target.value || null })
+                            }
+                            className="w-full rounded-lg border border-gray-200 px-2 py-1 text-sm text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                          />
+                        )}
+                        {def.fieldType === "checkbox" && (
+                          <input
+                            type="checkbox"
+                            checked={!!val?.valueBool}
+                            onChange={(e) =>
+                              handleCustomFieldChange(def, { valueBool: e.target.checked })
+                            }
+                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                        )}
+                        {def.fieldType === "single_select" && (
+                          <select
+                            value={val?.valueSelectIds?.[0] ?? ""}
+                            onChange={(e) =>
+                              handleCustomFieldChange(def, {
+                                valueSelectIds: e.target.value ? [e.target.value] : null,
+                              })
+                            }
+                            className="w-full rounded-lg border border-gray-200 px-2 py-1 text-sm text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                          >
+                            <option value="">—</option>
+                            {choices.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.label}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        {def.fieldType === "multi_select" && (
+                          <div className="flex flex-wrap gap-2">
+                            {choices.length === 0 && (
+                              <span className="text-xs text-gray-400">No choices defined</span>
+                            )}
+                            {choices.map((c) => {
+                              const selected = val?.valueSelectIds?.includes(c.id) ?? false;
+                              return (
+                                <label key={c.id} className="flex items-center gap-1 text-xs text-gray-700">
+                                  <input
+                                    type="checkbox"
+                                    checked={selected}
+                                    onChange={(e) => {
+                                      const prev = val?.valueSelectIds || [];
+                                      const next = e.target.checked
+                                        ? [...prev, c.id]
+                                        : prev.filter((id) => id !== c.id);
+                                      handleCustomFieldChange(def, {
+                                        valueSelectIds: next.length ? next : null,
+                                      });
+                                    }}
+                                    className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                  />
+                                  {c.label}
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {def.fieldType === "people" && (
+                          <select
+                            value={val?.valueUserId ?? ""}
+                            onChange={(e) =>
+                              handleCustomFieldChange(def, { valueUserId: e.target.value || null })
+                            }
+                            className="w-full rounded-lg border border-gray-200 px-2 py-1 text-sm text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                          >
+                            <option value="">Unassigned</option>
+                            {allUsers.map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.name}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        {def.fieldType === "formula" && (
+                          <span className="text-sm text-gray-400">
+                            {val?.valueText ?? val?.valueNumber ?? "—"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Add custom field */}
+                {!showAddCustomField ? (
+                  <button
+                    onClick={() => setShowAddCustomField(true)}
+                    disabled={!task.projectId}
+                    className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 disabled:opacity-40"
+                  >
+                    <Plus className="h-3 w-3" /> Add custom field
+                  </button>
+                ) : (
+                  <div className="space-y-2 rounded-lg border border-gray-200 p-2">
+                    <input
+                      type="text"
+                      value={newFieldName}
+                      onChange={(e) => setNewFieldName(e.target.value)}
+                      placeholder="Field name"
+                      className="w-full rounded-lg border border-gray-200 px-2 py-1 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    />
+                    <select
+                      value={newFieldType}
+                      onChange={(e) => setNewFieldType(e.target.value as typeof newFieldType)}
+                      className="w-full rounded-lg border border-gray-200 px-2 py-1 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    >
+                      <option value="text">Text</option>
+                      <option value="number">Number</option>
+                      <option value="date">Date</option>
+                      <option value="checkbox">Checkbox</option>
+                      <option value="single_select">Single select</option>
+                      <option value="multi_select">Multi select</option>
+                      <option value="people">People</option>
+                    </select>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleCreateCustomField}
+                        disabled={!newFieldName.trim() || !task.projectId}
+                        className="rounded-lg bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        Create
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowAddCustomField(false);
+                          setNewFieldName("");
+                          setNewFieldType("text");
+                        }}
+                        className="rounded-lg border border-gray-200 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
+          </div>
+
+          {/* Attachments */}
+          <div className="mb-6">
+            <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <Paperclip className="h-3.5 w-3.5" /> Attachments
+            </h3>
+            <div className="space-y-1.5">
+              {taskAttachments.length === 0 && (
+                <p className="text-xs text-gray-400">No attachments</p>
+              )}
+              {taskAttachments.map((att) => (
+                <div
+                  key={att.id}
+                  className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2"
+                >
+                  <Paperclip className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm text-gray-900">{att.filename}</div>
+                    <div className="text-[10px] text-gray-400">
+                      {att.mimeType || "file"}
+                      {att.sizeBytes ? ` · ${formatBytes(att.sizeBytes)}` : ""}
+                    </div>
+                  </div>
+                  {att.publicUrl && (
+                    <a
+                      href={att.publicUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                      title="Download"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+                  <button
+                    onClick={() => handleDeleteAttachment(att.id)}
+                    className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                    title="Remove"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={(e) => handleFileUpload(e.target.files)}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 disabled:opacity-40"
+                >
+                  <Plus className="h-3 w-3" />
+                  {uploading ? "Uploading..." : "Attach file"}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Dependencies (enhanced) */}
+          <div className="mb-6">
+            <button
+              onClick={() => setShowDeps(!showDeps)}
+              className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-gray-500"
+            >
+              {showDeps ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+              Dependencies
+            </button>
+            {showDeps && (
+              <div className="space-y-3">
+                {/* Blocked by */}
+                <div>
+                  <div className="mb-1 text-[11px] font-medium text-gray-500">Blocked by</div>
+                  <div className="space-y-1.5">
+                    {blockers.length === 0 && (
+                      <p className="text-xs text-gray-400">No blockers</p>
+                    )}
+                    {blockers.map((b) => (
+                      <div
+                        key={b.id}
+                        className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2"
+                      >
+                        <Link2 className="h-3.5 w-3.5 text-gray-400" />
+                        <span
+                          className={`flex-1 text-sm ${
+                            b.completed ? "text-gray-400 line-through" : "text-gray-900"
+                          }`}
+                        >
+                          {b.title}
+                        </span>
+                        <button
+                          onClick={() => handleRemoveBlocker(b.id)}
+                          className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                          aria-label="Remove blocker"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                    <div className="flex gap-2">
+                      <select
+                        value={addBlockerTaskId}
+                        onChange={(e) => setAddBlockerTaskId(e.target.value)}
+                        className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                      >
+                        <option value="">+ Add blocker...</option>
+                        {projectTasksForDeps.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.title}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={handleAddBlocker}
+                        disabled={!addBlockerTaskId}
+                        className="rounded-lg bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Blocking */}
+                <div>
+                  <div className="mb-1 text-[11px] font-medium text-gray-500">Blocking</div>
+                  <div className="space-y-1.5">
+                    {blockedTasks.length === 0 && (
+                      <p className="text-xs text-gray-400">Not blocking anything</p>
+                    )}
+                    {blockedTasks.map((b) => (
+                      <div
+                        key={b.id}
+                        className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2"
+                      >
+                        <Link2 className="h-3.5 w-3.5 text-gray-400" />
+                        <span
+                          className={`flex-1 text-sm ${
+                            b.completed ? "text-gray-400 line-through" : "text-gray-900"
+                          }`}
+                        >
+                          {b.title}
+                        </span>
+                        <button
+                          onClick={() => handleRemoveBlocked(b.id)}
+                          className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                          aria-label="Remove dependency"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                    <div className="flex gap-2">
+                      <select
+                        value={addBlockedTaskId}
+                        onChange={(e) => setAddBlockedTaskId(e.target.value)}
+                        className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                      >
+                        <option value="">+ Add blocked task...</option>
+                        {projectTasksForDeps.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.title}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={handleAddBlocked}
+                        disabled={!addBlockedTaskId}
+                        className="rounded-lg bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Time Tracking */}
+          <div className="mb-6">
+            <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <Clock className="h-3.5 w-3.5" /> Time Tracking
+            </h3>
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-900">
+                  Total: <span className="font-medium">{formatMinutes(actualMinutes)}</span>
+                </span>
+                {openTimerEntry && (
+                  <span className="rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-medium text-green-600">
+                    Timer running
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={handleToggleTimer}
+                  className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white ${
+                    openTimerEntry ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"
+                  }`}
+                >
+                  {openTimerEntry ? (
+                    <>
+                      <Square className="h-3 w-3" /> Stop
+                    </>
+                  ) : (
+                    <>
+                      <Play className="h-3 w-3" /> Start timer
+                    </>
+                  )}
+                </button>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={1}
+                    value={manualMinutes}
+                    onChange={(e) =>
+                      setManualMinutes(e.target.value === "" ? "" : Number(e.target.value))
+                    }
+                    placeholder="Minutes"
+                    className="w-20 rounded-lg border border-gray-200 px-2 py-1 text-xs focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  />
+                  <button
+                    onClick={handleAddManualTime}
+                    disabled={!manualMinutes || manualMinutes <= 0}
+                    className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Recurrence */}
+          <div className="mb-6">
+            <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <Repeat className="h-3.5 w-3.5" /> Recurrence
+            </h3>
+            <div className="flex items-center gap-2">
+              <select
+                value={recurrenceFreq}
+                onChange={(e) => handleRecurrenceChange(e.target.value, recurrenceInterval)}
+                className="rounded-lg border border-gray-200 px-2 py-1 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              >
+                <option value="none">None</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+              {recurrenceFreq !== "none" && (
+                <>
+                  <span className="text-xs text-gray-500">every</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={recurrenceInterval}
+                    onChange={(e) =>
+                      handleRecurrenceChange(recurrenceFreq, Math.max(1, Number(e.target.value) || 1))
+                    }
+                    className="w-16 rounded-lg border border-gray-200 px-2 py-1 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  />
+                  <span className="text-xs text-gray-500">
+                    {recurrenceFreq === "daily"
+                      ? "day(s)"
+                      : recurrenceFreq === "weekly"
+                      ? "week(s)"
+                      : "month(s)"}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Projects (Multi-homing) */}
+          <div className="mb-6">
+            <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <FolderKanban className="h-3.5 w-3.5" /> Projects
+            </h3>
+            <div className="space-y-1.5">
+              {multiHomedProjects.length === 0 && (
+                <p className="text-xs text-gray-400">Not in any project</p>
+              )}
+              {multiHomedProjects.map((p) => {
+                const isPrimary = p.id === task.projectId;
+                return (
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-1.5"
+                  >
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: p.color || "#6366f1" }}
+                    />
+                    <span className="flex-1 text-sm text-gray-900">{p.name}</span>
+                    {isPrimary && (
+                      <span className="text-[10px] font-medium text-gray-400">primary</span>
+                    )}
+                    {!isPrimary && (
+                      <button
+                        onClick={() => handleRemoveFromProject(p.id)}
+                        className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                        aria-label="Remove from project"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              <div className="flex gap-2">
+                <select
+                  value={addProjectId}
+                  onChange={(e) => setAddProjectId(e.target.value)}
+                  className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                >
+                  <option value="">+ Add to project...</option>
+                  {allProjects
+                    .filter((p) => !multiHomedProjects.some((mp) => mp.id === p.id))
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  onClick={handleAddToProject}
+                  disabled={!addProjectId}
+                  className="rounded-lg bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Comments */}
