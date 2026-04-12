@@ -33,7 +33,11 @@ type StatusFilter = "all" | ProjectStatusType;
 
 export default function ProjectsPage() {
   const router = useRouter();
-  const { projects, tasks, createProject } = useAppStore();
+  const store = useAppStore();
+  const { tasks, createProject } = store;
+  // Use per-user filtered selector when available; fall back to full list.
+  const getVisibleProjects = (store as any).getVisibleProjects as undefined | (() => Project[]);
+  const projects = getVisibleProjects ? getVisibleProjects() : store.projects;
   const [sortBy, setSortBy] = useState<SortKey>("recent");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");

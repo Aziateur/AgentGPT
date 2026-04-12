@@ -29,7 +29,10 @@ function getGreeting() {
 // -- Page ------------------------------------------------------------------
 
 export default function HomePage() {
-  const { initialized, loading, currentUser, projects, tasks } = useAppStore();
+  const store = useAppStore();
+  const { initialized, loading, currentUser, tasks } = store;
+  const getVisibleProjects = (store as any).getVisibleProjects as undefined | (() => Project[]);
+  const projects = getVisibleProjects ? getVisibleProjects() : store.projects;
 
   if (!initialized || loading) {
     return (

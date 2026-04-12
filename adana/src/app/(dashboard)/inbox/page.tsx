@@ -55,13 +55,11 @@ type FilterKey = "all" | string;
 // -- Component ----------------------------------------------------------------
 
 export default function InboxPage() {
-  const {
-    notifications,
-    loading,
-    markNotificationRead,
-    markAllNotificationsRead,
-    archiveNotification,
-  } = useAppStore();
+  const store = useAppStore();
+  const { loading, markNotificationRead, markAllNotificationsRead, archiveNotification } = store;
+  const getMyNotifications = (store as any).getMyNotifications as undefined | (() => any[]);
+  // Prefer DB-backed user-filtered stream; fall back to legacy array.
+  const notifications = getMyNotifications ? getMyNotifications() : store.notifications;
   const [filter, setFilter] = useState<FilterKey>("all");
 
   const filters: { key: FilterKey; label: string }[] = [
