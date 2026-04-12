@@ -376,6 +376,110 @@ function FormsCard({ projectId }: { projectId: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Task types card
+// ---------------------------------------------------------------------------
+
+function TaskTypesCard({ projectId }: { projectId: string }) {
+  const taskTypes = useAppStore((s) => s.getProjectTaskTypes(projectId));
+  const createTaskType = useAppStore((s) => s.createTaskType);
+  const deleteTaskType = useAppStore((s) => s.deleteTaskType);
+
+  const [adding, setAdding] = React.useState(false);
+  const [name, setName] = React.useState("");
+  const [color, setColor] = React.useState("#4c6ef5");
+
+  async function handleCreate() {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    await createTaskType({ projectId, name: trimmed, color });
+    setName("");
+    setColor("#4c6ef5");
+    setAdding(false);
+  }
+
+  return (
+    <FeatureCard
+      title="Task types"
+      description="Custom task type labels for this project."
+      icon={ListChecks}
+      count={taskTypes.length}
+    >
+      {taskTypes.length > 0 && (
+        <ul className="mb-2 space-y-1">
+          {taskTypes.map((tt) => (
+            <li
+              key={tt.id}
+              className="flex items-center justify-between rounded border border-gray-100 bg-gray-50 px-2 py-1.5 text-xs"
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <span
+                  className="h-3 w-3 rounded-full"
+                  style={{ backgroundColor: tt.color }}
+                />
+                <span className="truncate font-medium text-gray-900">
+                  {tt.name}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => deleteTaskType(tt.id)}
+                className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-red-600"
+                aria-label="Delete task type"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {adding ? (
+        <div className="space-y-2 rounded-md border border-gray-200 bg-gray-50 p-2">
+          <Input
+            placeholder="Task type name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            inputSize="sm"
+            autoFocus
+          />
+          <input
+            type="color"
+            value={color}
+            onChange={(e) => setColor(e.target.value)}
+            className="h-7 w-16 cursor-pointer rounded border border-gray-200"
+          />
+          <div className="flex justify-end gap-1.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setAdding(false);
+                setName("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleCreate} disabled={!name.trim()}>
+              Add
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full justify-center"
+          onClick={() => setAdding(true)}
+        >
+          <Plus className="mr-1 h-3.5 w-3.5" />
+          Add task type
+        </Button>
+      )}
+    </FeatureCard>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Task templates card
 // ---------------------------------------------------------------------------
 
@@ -511,6 +615,7 @@ export function CustomizePanel({
             <div className="space-y-2 px-5 pb-6">
               <FieldsCard projectId={projectId} />
               <FormsCard projectId={projectId} />
+              <TaskTypesCard projectId={projectId} />
               <TaskTemplatesCard projectId={projectId} />
               <FeatureCard
                 title="Apps"

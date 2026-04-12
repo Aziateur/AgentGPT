@@ -161,6 +161,10 @@ export function TaskDetailPanel({
 
   const updateTaskStore = useAppStore((s) => s.updateTask);
 
+  const projectTaskTypes = useAppStore((s) =>
+    task.projectId ? s.getProjectTaskTypes(task.projectId) : []
+  );
+
   // Derive data from task prop
   const subtasks: Task[] = (task.subtasks as Task[]) || [];
   const comments: CommentType[] = (task.comments as CommentType[]) || [];
@@ -653,6 +657,26 @@ export function TaskDetailPanel({
               <span className={`rounded px-2 py-0.5 text-xs font-medium ${priority.color}`}>
                 {priority.label}
               </span>
+            </div>
+
+            {/* Task type */}
+            <div className="flex items-center gap-3">
+              <Milestone className="h-4 w-4 text-gray-400" />
+              <span className="w-20 text-xs text-gray-500">Type</span>
+              <select
+                value={task.taskType || "task"}
+                onChange={(e) => onUpdate?.(task.id, { taskType: e.target.value })}
+                className="rounded border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-800 focus:border-indigo-400 focus:outline-none"
+              >
+                <option value="task">Task</option>
+                <option value="milestone">Milestone</option>
+                <option value="approval">Approval</option>
+                {projectTaskTypes.map((tt) => (
+                  <option key={tt.id} value={`custom:${tt.id}`}>
+                    {tt.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Project */}

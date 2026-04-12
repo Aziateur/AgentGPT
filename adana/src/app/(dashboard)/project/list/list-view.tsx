@@ -164,6 +164,7 @@ export default function ProjectListPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createSectionId, setCreateSectionId] = useState<string | null>(null);
   const [quickFilters, setQuickFilters] = useState<Set<QuickFilterKey>>(new Set());
+  const [viewSearch, setViewSearch] = useState("");
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [appliedFilters, setAppliedFilters] = useState<FilterSpec[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -202,10 +203,14 @@ export default function ProjectListPage() {
     });
   }
 
-  const tasks = useMemo(
-    () => applyQuickFilters(rawTasks, quickFilters),
-    [rawTasks, quickFilters]
-  );
+  const tasks = useMemo(() => {
+    const filtered = applyQuickFilters(rawTasks, quickFilters);
+    const q = viewSearch.trim().toLowerCase();
+    if (!q) return filtered;
+    return filtered.filter(
+      (t) => t.title.toLowerCase().includes(q) || (t.description ?? "").toLowerCase().includes(q)
+    );
+  }, [rawTasks, quickFilters, viewSearch]);
 
   const selectedTask = tasks.find((t) => t.id === selectedTaskId) ?? null;
 
@@ -360,18 +365,27 @@ export default function ProjectListPage() {
         {/* Main list */}
         <div className="flex-1 overflow-auto">
           <div className="p-4">
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-3 flex items-center justify-between gap-2">
               <h2 className="text-lg font-semibold text-gray-900">Tasks</h2>
-              <button
-                onClick={() => {
-                  setCreateSectionId(null);
-                  setShowCreateModal(true);
-                }}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
-              >
-                <Plus className="h-4 w-4" />
-                Add task
-              </button>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={viewSearch}
+                  onChange={(e) => setViewSearch(e.target.value)}
+                  placeholder="Search this view..."
+                  className="w-48 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 outline-none focus:border-indigo-400"
+                />
+                <button
+                  onClick={() => {
+                    setCreateSectionId(null);
+                    setShowCreateModal(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add task
+                </button>
+              </div>
             </div>
 
             <div className="mb-3">
