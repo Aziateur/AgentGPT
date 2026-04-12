@@ -10,11 +10,14 @@ import { CalendarView } from "@/components/calendar/calendar-view";
 
 function ViewNav({ projectId, active }: { projectId: string; active: string }) {
   const views = [
+    { key: "overview", label: "Overview" },
     { key: "list", label: "List" },
     { key: "board", label: "Board" },
     { key: "timeline", label: "Timeline" },
     { key: "calendar", label: "Calendar" },
-    { key: "overview", label: "Overview" },
+    { key: "note", label: "Note" },
+    { key: "files", label: "Files" },
+    { key: "dashboard", label: "Dashboard" },
   ];
   return (
     <div className="flex gap-1 border-b border-gray-200 bg-white px-6">

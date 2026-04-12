@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Plus } from "lucide-react";
@@ -26,11 +26,14 @@ function formatDate(iso: string) {
 
 function ViewNav({ projectId, active }: { projectId: string; active: string }) {
   const views = [
+    { key: "overview", label: "Overview" },
     { key: "list", label: "List" },
     { key: "board", label: "Board" },
     { key: "timeline", label: "Timeline" },
     { key: "calendar", label: "Calendar" },
-    { key: "overview", label: "Overview" },
+    { key: "note", label: "Note" },
+    { key: "files", label: "Files" },
+    { key: "dashboard", label: "Dashboard" },
   ];
   return (
     <div className="flex gap-1 border-b border-gray-200 bg-white px-6">
@@ -74,6 +77,16 @@ export default function ProjectListPage() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createSectionId, setCreateSectionId] = useState<string | null>(null);
+
+  // Listen for global create-task event (header + keyboard shortcut)
+  useEffect(() => {
+    function onCreateTask() {
+      setCreateSectionId(null);
+      setShowCreateModal(true);
+    }
+    window.addEventListener("adana:create-task", onCreateTask);
+    return () => window.removeEventListener("adana:create-task", onCreateTask);
+  }, []);
 
   const selectedTask = tasks.find((t) => t.id === selectedTaskId) ?? null;
 

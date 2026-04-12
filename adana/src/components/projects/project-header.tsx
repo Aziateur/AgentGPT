@@ -15,8 +15,13 @@ import {
   Trash2,
   Copy,
   Settings,
+  Settings2,
+  StickyNote,
+  Paperclip,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CustomizePanel } from "./customize-panel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
@@ -34,7 +39,7 @@ import type { Project, ProjectView, ProjectStatusType, User } from "@/types";
 // Types
 // ---------------------------------------------------------------------------
 
-type ExtendedView = ProjectView | "overview";
+type ExtendedView = ProjectView | "overview" | "note" | "files" | "dashboard";
 
 interface ViewTab {
   id: ExtendedView;
@@ -43,11 +48,14 @@ interface ViewTab {
 }
 
 const VIEW_TABS: ViewTab[] = [
+  { id: "overview", label: "Overview", icon: FileText },
   { id: "list", label: "List", icon: List },
   { id: "board", label: "Board", icon: LayoutGrid },
   { id: "timeline", label: "Timeline", icon: GanttChart },
   { id: "calendar", label: "Calendar", icon: CalendarDays },
-  { id: "overview", label: "Overview", icon: FileText },
+  { id: "note", label: "Note", icon: StickyNote },
+  { id: "files", label: "Files", icon: Paperclip },
+  { id: "dashboard", label: "Dashboard", icon: BarChart3 },
 ];
 
 export interface ProjectHeaderProps {
@@ -135,6 +143,7 @@ export function ProjectHeader({
   const members = membersProp ?? MOCK_MEMBERS;
   const [activeView, setActiveView] = useState<ExtendedView>((currentViewProp ?? project.defaultView) as ExtendedView);
   const [favorite, setFavorite] = useState(isFavoriteProp ?? false);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
 
   const statusCfg = STATUS_BADGE_MAP[project.status as ProjectStatusType];
 
@@ -216,6 +225,20 @@ export function ProjectHeader({
             Share
           </Button>
 
+          {/* Customize button */}
+          <Tooltip content="Customize">
+            <span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setCustomizeOpen((v) => !v)}
+              >
+                <Settings2 className="h-4 w-4 mr-1" />
+                Customize
+              </Button>
+            </span>
+          </Tooltip>
+
           {/* More menu */}
           <DropdownMenu>
             <DropdownTrigger asChild>
@@ -272,6 +295,13 @@ export function ProjectHeader({
           );
         })}
       </div>
+
+      {/* Customize side drawer */}
+      <CustomizePanel
+        projectId={project.id}
+        open={customizeOpen}
+        onClose={() => setCustomizeOpen(false)}
+      />
     </div>
   );
 }
