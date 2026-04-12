@@ -640,6 +640,3 @@ export default function GoalsPage() {
   );
 }
 
-// Intentional dead reference to keep `goalsById` calc usable if extended.
-// (Actual use lives in the memo above.)
-export const __DEAD__ = (_: Map<string, GoalNode>) => _;

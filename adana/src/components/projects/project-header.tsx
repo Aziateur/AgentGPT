@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CustomizePanel } from "./customize-panel";
+import { PermissionsModal } from "./permissions-modal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
@@ -150,6 +151,7 @@ export function ProjectHeader({
   const [activeView, setActiveView] = useState<ExtendedView>((currentViewProp ?? project.defaultView) as ExtendedView);
   const [favorite, setFavorite] = useState(isFavoriteProp ?? false);
   const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [permissionsOpen, setPermissionsOpen] = useState(false);
   const [showSavePopup, setShowSavePopup] = useState(false);
   const [savedViewName, setSavedViewName] = useState("");
 
@@ -303,6 +305,10 @@ export function ProjectHeader({
                 <Settings className="h-4 w-4" />
                 Project settings
               </DropdownItem>
+              <DropdownItem onClick={() => setPermissionsOpen(true)}>
+                <Settings className="h-4 w-4" />
+                Manage project permissions
+              </DropdownItem>
               <DropdownSeparator />
               <DropdownItem onClick={onArchive}>
                 <Archive className="h-4 w-4" />
@@ -413,6 +419,13 @@ export function ProjectHeader({
         projectId={project.id}
         open={customizeOpen}
         onClose={() => setCustomizeOpen(false)}
+      />
+
+      {/* Project permissions modal */}
+      <PermissionsModal
+        projectId={project.id}
+        open={permissionsOpen}
+        onClose={() => setPermissionsOpen(false)}
       />
     </div>
   );

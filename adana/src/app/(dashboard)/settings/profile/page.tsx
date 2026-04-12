@@ -19,11 +19,28 @@ export default function ProfileSettingsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Out-of-office
+  const [oooEnabled, setOooEnabled] = useState<boolean>(!!currentUser.oooEnabled);
+  const [oooFrom, setOooFrom] = useState<string>(
+    currentUser.oooFrom ? String(currentUser.oooFrom).slice(0, 10) : ""
+  );
+  const [oooUntil, setOooUntil] = useState<string>(
+    currentUser.oooUntil ? String(currentUser.oooUntil).slice(0, 10) : ""
+  );
+  const [oooMessage, setOooMessage] = useState<string>(
+    (currentUser.oooMessage as string) ?? ""
+  );
+  const [savingOoo, setSavingOoo] = useState(false);
+
   // Keep form in sync when currentUser hydrates from persist store.
   useEffect(() => {
     setName(currentUser.name ?? "");
     setEmail(currentUser.email ?? "");
     setAvatar(currentUser.avatar ?? "");
+    setOooEnabled(!!currentUser.oooEnabled);
+    setOooFrom(currentUser.oooFrom ? String(currentUser.oooFrom).slice(0, 10) : "");
+    setOooUntil(currentUser.oooUntil ? String(currentUser.oooUntil).slice(0, 10) : "");
+    setOooMessage((currentUser.oooMessage as string) ?? "");
   }, [currentUser.id]);
 
   async function handleSave(e: React.FormEvent) {
@@ -59,6 +76,38 @@ export default function ProfileSettingsPage() {
       setError(err?.message ?? "Could not save profile.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSaveOoo() {
+    if (!currentUser.id) return;
+    setSavingOoo(true);
+    setError(null);
+    setMessage(null);
+    const payload = {
+      ooo_enabled: oooEnabled,
+      ooo_from: oooFrom ? new Date(oooFrom).toISOString() : null,
+      ooo_until: oooUntil ? new Date(oooUntil).toISOString() : null,
+      ooo_message: oooMessage.trim() || null,
+    };
+    try {
+      const { error: dbErr } = await supabase
+        .from("users")
+        .update(payload)
+        .eq("id", currentUser.id);
+      if (dbErr) throw dbErr;
+      setCurrentUser({
+        ...currentUser,
+        oooEnabled: payload.ooo_enabled,
+        oooFrom: payload.ooo_from,
+        oooUntil: payload.ooo_until,
+        oooMessage: payload.ooo_message,
+      });
+      setMessage("Out-of-office saved.");
+    } catch (err: any) {
+      setError(err?.message ?? "Could not save out-of-office.");
+    } finally {
+      setSavingOoo(false);
     }
   }
 
@@ -156,6 +205,72 @@ export default function ProfileSettingsPage() {
           </Button>
         </div>
       </form>
+
+      {/* Out of office ------------------------------------------------ */}
+      <section className="mt-10 rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-surface-dark">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+              Out of office
+            </h2>
+            <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+              Show teammates that you&apos;re away. An orange dot appears on your avatar.
+            </p>
+          </div>
+          <label className="relative inline-flex cursor-pointer items-center">
+            <input
+              type="checkbox"
+              checked={oooEnabled}
+              onChange={(e) => setOooEnabled(e.target.checked)}
+              className="peer sr-only"
+            />
+            <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-orange-500 peer-checked:after:translate-x-full dark:bg-gray-600"></div>
+          </label>
+        </div>
+
+        {oooEnabled && (
+          <div className="mt-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="From"
+                type="date"
+                value={oooFrom}
+                onChange={(e) => setOooFrom(e.target.value)}
+              />
+              <Input
+                label="Until"
+                type="date"
+                value={oooUntil}
+                onChange={(e) => setOooUntil(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                Message (optional)
+              </label>
+              <textarea
+                value={oooMessage}
+                onChange={(e) => setOooMessage(e.target.value)}
+                rows={3}
+                placeholder="I'm out of office and will reply when I return."
+                className="w-full rounded-md border border-gray-200 bg-white p-2 text-sm outline-none focus:border-indigo-400 dark:border-gray-600 dark:bg-surface-dark-secondary dark:text-gray-100"
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="mt-4 flex justify-end">
+          <Button
+            type="button"
+            variant="primary"
+            loading={savingOoo}
+            onClick={handleSaveOoo}
+            disabled={!currentUser.id}
+          >
+            Save out-of-office
+          </Button>
+        </div>
+      </section>
     </div>
   );
 }

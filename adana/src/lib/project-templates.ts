@@ -28,6 +28,8 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
     description: "Plan and execute a product marketing launch.",
     icon: "rocket",
     color: "#ec4899",
+    category: "Marketing",
+    emoji: "🚀",
     sections: ["Planning", "Content", "Launch"],
     tasks: [
       { sectionIdx: 0, title: "Define target audience" },
@@ -49,6 +51,8 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
     description: "Two-week engineering sprint with clear stages.",
     icon: "code",
     color: "#6366f1",
+    category: "Engineering",
+    emoji: "⚙️",
     sections: ["Backlog", "In Progress", "Review", "Done"],
     tasks: [
       { sectionIdx: 0, title: "Groom backlog" },
@@ -70,6 +74,8 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
     description: "Track candidates through each hiring stage.",
     icon: "users",
     color: "#10b981",
+    category: "Operations & PMO",
+    emoji: "👥",
     sections: ["Sourced", "Phone Screen", "Onsite", "Offer"],
     tasks: [
       { sectionIdx: 0, title: "Post job description" },
@@ -91,6 +97,8 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
     description: "Quarterly roadmap with themes and milestones.",
     icon: "map",
     color: "#0ea5e9",
+    category: "Productivity",
+    emoji: "🗺️",
     sections: ["Now", "Next", "Later"],
     tasks: [
       { sectionIdx: 0, title: "Ship onboarding revamp" },
@@ -111,6 +119,8 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
     description: "Organize an event from kickoff to wrap-up.",
     icon: "calendar",
     color: "#f59e0b",
+    category: "Marketing",
+    emoji: "🎉",
     sections: ["Logistics", "Promotion", "Day Of"],
     tasks: [
       { sectionIdx: 0, title: "Book venue" },
@@ -131,6 +141,8 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
     description: "Triage and resolve incoming bug reports.",
     icon: "bug",
     color: "#ef4444",
+    category: "Engineering",
+    emoji: "🐛",
     sections: ["New", "Triaged", "Fixing", "Verified"],
     tasks: [
       { sectionIdx: 0, title: "Crash on login (iOS)" },

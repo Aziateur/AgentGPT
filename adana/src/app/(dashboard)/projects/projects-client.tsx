@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { PROJECT_TEMPLATES } from "@/lib/project-templates";
+import { PROJECT_TEMPLATES, type ProjectTemplateCategory } from "@/lib/project-templates";
 import { applyProjectTemplate } from "@/lib/project-templates-apply";
 import { useAppStore } from "@/store/app-store";
 import { generateProjectFromPrompt } from "@/lib/ai-generate-project";
@@ -31,6 +31,16 @@ const statusLabel: Record<ProjectStatusType, string> = {
 type SortKey = "name" | "recent" | "status";
 type StatusFilter = "all" | ProjectStatusType;
 type CreateTab = "blank" | "template" | "ai";
+type TemplateCategoryFilter = "For you" | ProjectTemplateCategory | "All";
+
+const TEMPLATE_CATEGORY_FILTERS: TemplateCategoryFilter[] = [
+  "For you",
+  "Marketing",
+  "Operations & PMO",
+  "Productivity",
+  "Engineering",
+  "All",
+];
 
 interface ProjectItem {
   id: string;
@@ -70,6 +80,13 @@ export function ProjectsPageClient({ projects }: { projects: ProjectItem[] }) {
   const [busy, setBusy] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiError, setAiError] = useState<string | null>(null);
+  const [templateCategory, setTemplateCategory] =
+    useState<TemplateCategoryFilter>("For you");
+
+  const filteredTemplates =
+    templateCategory === "For you" || templateCategory === "All"
+      ? PROJECT_TEMPLATES
+      : PROJECT_TEMPLATES.filter((t) => t.category === templateCategory);
 
   // Derive latest status for each project from its statuses array
   function getProjectStatus(p: ProjectItem): ProjectStatusType {
@@ -207,31 +224,57 @@ export function ProjectsPageClient({ projects }: { projects: ProjectItem[] }) {
             </div>
 
             {createTab === "template" && (
-              <div className="mb-4 grid max-h-64 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
-                {PROJECT_TEMPLATES.map((tpl) => (
-                  <button
-                    key={tpl.id}
-                    onClick={() => handlePickTemplate(tpl.id)}
-                    className={`flex flex-col items-start rounded-lg border p-3 text-left transition ${
-                      selectedTemplateId === tpl.id
-                        ? "border-indigo-400 bg-indigo-50"
-                        : "border-gray-200 bg-white hover:border-gray-300"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="inline-block h-3 w-3 rounded-full"
-                        style={{ backgroundColor: tpl.color }}
-                      />
-                      <span className="text-sm font-medium text-gray-900">{tpl.name}</span>
+              <>
+                <div className="mb-3 flex flex-wrap gap-1.5">
+                  {TEMPLATE_CATEGORY_FILTERS.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setTemplateCategory(cat)}
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition ${
+                        templateCategory === cat
+                          ? "bg-indigo-100 text-indigo-700"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+                <div className="mb-4 grid max-h-64 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
+                  {filteredTemplates.length === 0 ? (
+                    <div className="col-span-full py-6 text-center text-xs text-gray-400">
+                      No templates in this category yet.
                     </div>
-                    <span className="mt-1 text-xs text-gray-500">{tpl.description}</span>
-                    <span className="mt-2 text-[10px] uppercase text-gray-400">
-                      {tpl.sections.length} sections · {tpl.tasks.length} tasks
-                    </span>
-                  </button>
-                ))}
-              </div>
+                  ) : (
+                    filteredTemplates.map((tpl) => (
+                      <button
+                        key={tpl.id}
+                        onClick={() => handlePickTemplate(tpl.id)}
+                        className={`flex flex-col items-start rounded-lg border p-3 text-left transition ${
+                          selectedTemplateId === tpl.id
+                            ? "border-indigo-400 bg-indigo-50"
+                            : "border-gray-200 bg-white hover:border-gray-300"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg leading-none" aria-hidden>
+                            {tpl.emoji}
+                          </span>
+                          <span
+                            className="inline-block h-3 w-3 rounded-full"
+                            style={{ backgroundColor: tpl.color }}
+                          />
+                          <span className="text-sm font-medium text-gray-900">{tpl.name}</span>
+                        </div>
+                        <span className="mt-1 text-xs text-gray-500">{tpl.description}</span>
+                        <span className="mt-2 text-[10px] uppercase text-gray-400">
+                          {tpl.category} · {tpl.sections.length} sections · {tpl.tasks.length} tasks
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </>
             )}
 
             {createTab === "ai" && (

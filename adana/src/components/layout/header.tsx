@@ -351,7 +351,7 @@ export function Header() {
           <div className="relative">
             <button
               onClick={() => setAvatarMenuOpen(!avatarMenuOpen)}
-              className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-adana-600 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+              className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-adana-600 text-xs font-semibold text-white transition-opacity hover:opacity-90"
               aria-label="User menu"
             >
               {currentUser?.avatar ? (
@@ -362,6 +362,12 @@ export function Header() {
                 />
               ) : (
                 userInitials
+              )}
+              {isUserOOO(currentUser) && (
+                <span
+                  title="Out of office"
+                  className="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-orange-500 dark:border-surface-dark"
+                />
               )}
             </button>
 
@@ -387,6 +393,7 @@ export function Header() {
                       </p>
                     </div>
                   )}
+                  <WorkspaceSwitcher />
                   <button
                     onClick={() => {
                       setAvatarMenuOpen(false);
@@ -406,6 +413,26 @@ export function Header() {
                   >
                     <Settings className="h-4 w-4" />
                     Settings
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAvatarMenuOpen(false);
+                      router.push("/settings/admin");
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
+                  >
+                    <Settings className="h-4 w-4" />
+                    Admin console
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAvatarMenuOpen(false);
+                      setInviteOpen(true);
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    Invite teammates
                   </button>
                   <div className="my-1 h-px bg-gray-100 dark:bg-gray-700" />
                   <button
@@ -485,6 +512,8 @@ export function Header() {
           </motion.aside>
         </>
       )}
+
+      <InviteModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
     </>
   );
 }
