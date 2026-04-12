@@ -3,6 +3,9 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { PROJECT_TEMPLATES } from "@/lib/project-templates";
+import { applyProjectTemplate } from "@/lib/project-templates-apply";
+import { useAppStore } from "@/store/app-store";
 
 // -- Helpers ------------------------------------------------------------------
 
@@ -26,6 +29,7 @@ const statusLabel: Record<ProjectStatusType, string> = {
 
 type SortKey = "name" | "recent" | "status";
 type StatusFilter = "all" | ProjectStatusType;
+type CreateTab = "blank" | "template";
 
 interface ProjectItem {
   id: string;
@@ -52,13 +56,17 @@ interface ProjectItem {
 export function ProjectsPageClient({ projects }: { projects: ProjectItem[] }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const createProject = useAppStore((s) => s.createProject);
   const [sortBy, setSortBy] = useState<SortKey>("recent");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createTab, setCreateTab] = useState<CreateTab>("blank");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDesc, setNewProjectDesc] = useState("");
   const [newProjectColor, setNewProjectColor] = useState("#4f46e5");
+  const [busy, setBusy] = useState(false);
 
   // Derive latest status for each project from its statuses array
   function getProjectStatus(p: ProjectItem): ProjectStatusType {
@@ -94,13 +102,44 @@ export function ProjectsPageClient({ projects }: { projects: ProjectItem[] }) {
     { key: "complete", label: "Complete" },
   ];
 
-  function handleCreateProject() {
-    if (!newProjectName.trim()) return;
-    // Client-side only for demo
+  function resetForm() {
     setShowCreateModal(false);
     setNewProjectName("");
     setNewProjectDesc("");
     setNewProjectColor("#4f46e5");
+    setSelectedTemplateId(null);
+    setCreateTab("blank");
+  }
+
+  async function handleCreateProject() {
+    if (!newProjectName.trim()) return;
+    setBusy(true);
+    try {
+      if (createTab === "template" && selectedTemplateId) {
+        const p = await applyProjectTemplate(selectedTemplateId, newProjectName.trim());
+        resetForm();
+        if (p) router.push(`/project/${p.defaultView || "list"}?id=${p.id}`);
+        return;
+      }
+      const p = await createProject({
+        name: newProjectName.trim(),
+        description: newProjectDesc.trim() || null,
+        color: newProjectColor,
+      });
+      resetForm();
+      router.push(`/project/${p.defaultView || "list"}?id=${p.id}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function handlePickTemplate(id: string) {
+    setSelectedTemplateId(id);
+    const tpl = PROJECT_TEMPLATES.find((t) => t.id === id);
+    if (tpl) {
+      if (!newProjectName.trim()) setNewProjectName(tpl.name);
+      setNewProjectColor(tpl.color);
+    }
   }
 
   return (
@@ -122,8 +161,55 @@ export function ProjectsPageClient({ projects }: { projects: ProjectItem[] }) {
       {/* Create Project Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
+          <div className="w-full max-w-2xl rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
             <h2 className="mb-4 text-lg font-semibold text-gray-900">New Project</h2>
+
+            {/* Tabs */}
+            <div className="mb-4 flex items-center gap-1 border-b border-gray-200">
+              {(["blank", "template"] as CreateTab[]).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setCreateTab(t)}
+                  className={`relative px-3 py-2 text-sm font-medium transition ${
+                    createTab === t ? "text-indigo-600" : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  {t === "blank" ? "Blank" : "From template"}
+                  {createTab === t && (
+                    <span className="absolute inset-x-0 -bottom-px h-0.5 bg-indigo-600" />
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {createTab === "template" && (
+              <div className="mb-4 grid max-h-64 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
+                {PROJECT_TEMPLATES.map((tpl) => (
+                  <button
+                    key={tpl.id}
+                    onClick={() => handlePickTemplate(tpl.id)}
+                    className={`flex flex-col items-start rounded-lg border p-3 text-left transition ${
+                      selectedTemplateId === tpl.id
+                        ? "border-indigo-400 bg-indigo-50"
+                        : "border-gray-200 bg-white hover:border-gray-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="inline-block h-3 w-3 rounded-full"
+                        style={{ backgroundColor: tpl.color }}
+                      />
+                      <span className="text-sm font-medium text-gray-900">{tpl.name}</span>
+                    </div>
+                    <span className="mt-1 text-xs text-gray-500">{tpl.description}</span>
+                    <span className="mt-2 text-[10px] uppercase text-gray-400">
+                      {tpl.sections.length} sections · {tpl.tasks.length} tasks
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="space-y-3">
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Name</label>
@@ -136,39 +222,50 @@ export function ProjectsPageClient({ projects }: { projects: ProjectItem[] }) {
                   autoFocus
                 />
               </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Description</label>
-                <textarea
-                  value={newProjectDesc}
-                  onChange={(e) => setNewProjectDesc(e.target.value)}
-                  placeholder="What is this project about?"
-                  rows={3}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Color</label>
-                <input
-                  type="color"
-                  value={newProjectColor}
-                  onChange={(e) => setNewProjectColor(e.target.value)}
-                  className="h-8 w-16 cursor-pointer rounded border border-gray-200"
-                />
-              </div>
+              {createTab === "blank" && (
+                <>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Description
+                    </label>
+                    <textarea
+                      value={newProjectDesc}
+                      onChange={(e) => setNewProjectDesc(e.target.value)}
+                      placeholder="What is this project about?"
+                      rows={3}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Color</label>
+                    <input
+                      type="color"
+                      value={newProjectColor}
+                      onChange={(e) => setNewProjectColor(e.target.value)}
+                      className="h-8 w-16 cursor-pointer rounded border border-gray-200"
+                    />
+                  </div>
+                </>
+              )}
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <button
-                onClick={() => setShowCreateModal(false)}
+                onClick={resetForm}
                 className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateProject}
-                disabled={!newProjectName.trim() || isPending}
+                disabled={
+                  !newProjectName.trim() ||
+                  busy ||
+                  isPending ||
+                  (createTab === "template" && !selectedTemplateId)
+                }
                 className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
               >
-                {isPending ? "Creating..." : "Create Project"}
+                {busy || isPending ? "Creating..." : "Create Project"}
               </button>
             </div>
           </div>
