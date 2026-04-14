@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -194,14 +194,14 @@ export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: Si
 
   // Compute trial days left from currentUser.createdAt (client-only to avoid hydration mismatch)
   const [trialDaysLeft, setTrialDaysLeft] = useState(30);
+  const createdAt = (currentUser as any)?.createdAt as string | undefined;
   useEffect(() => {
-    const createdAt = (currentUser as any)?.createdAt;
     if (!createdAt) return;
     const created = new Date(createdAt).getTime();
     if (isNaN(created)) return;
     const daysSince = Math.floor((Date.now() - created) / (1000 * 60 * 60 * 24));
     setTrialDaysLeft(30 - daysSince);
-  }, [currentUser]);
+  }, [createdAt]);
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   const showTrialBar = mounted && trialDaysLeft > 0 && trialDaysLeft <= 30;
@@ -230,10 +230,21 @@ export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: Si
     }
   }, [sidebarCollapsed]);
 
-  // Prefer visible projects from data store if available
-  const visibleProjects = useDataStore((s: any) =>
-    typeof s.getVisibleProjects === "function" ? s.getVisibleProjects() : s.projects
-  );
+  // Prefer visible projects from data store if available.
+  // IMPORTANT: selector must return a stable ref when state hasn't changed; otherwise
+  // zustand re-renders indefinitely (React #185). Subscribe to raw state slices, filter in useMemo.
+  const rawStoreProjects = useDataStore((s: any) => s.projects);
+  const projectMembers = useDataStore((s: any) => s.projectMembers);
+  const currentUserId = useDataStore((s: any) => s.currentUser?.id);
+  const visibleProjects = useMemo(() => {
+    if (!currentUserId) return rawStoreProjects;
+    const memberIds = new Set<string>(
+      (projectMembers || []).filter((m: any) => m.userId === currentUserId).map((m: any) => m.projectId)
+    );
+    return (rawStoreProjects || []).filter(
+      (p: any) => p.creatorId === currentUserId || memberIds.has(p.id)
+    );
+  }, [rawStoreProjects, projectMembers, currentUserId]);
   const sourceProjects: Array<Record<string, unknown>> =
     (visibleProjects as Array<Record<string, unknown>> | undefined) ?? projects;
 

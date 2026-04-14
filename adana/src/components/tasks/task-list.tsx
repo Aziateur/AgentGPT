@@ -112,7 +112,11 @@ export function TaskList({
   className,
 }: TaskListProps) {
   const allTasks = useAppStore((s) => s.tasks);
-  const sections = useAppStore((s) => s.getProjectSections(projectId));
+  const allSections = useAppStore((s) => s.sections);
+  const sections = useMemo(
+    () => allSections.filter((x: any) => x.projectId === projectId),
+    [allSections, projectId]
+  );
   const users = useAppStore((s) => s.users);
   const updateTask = useAppStore((s) => s.updateTask);
   const toggleTaskComplete = useAppStore((s) => s.toggleTaskComplete);

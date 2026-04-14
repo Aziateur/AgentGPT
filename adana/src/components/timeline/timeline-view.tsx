@@ -172,7 +172,11 @@ function computeCriticalPath(
 // ---------------------------------------------------------------------------
 
 export function TimelineView({ projectId, onTaskClick, className }: TimelineViewProps) {
-  const allTasks = useAppStore((s) => s.getProjectTasks(projectId));
+  const storeTasks = useAppStore((s) => s.tasks);
+  const allTasks = React.useMemo(
+    () => storeTasks.filter((t: any) => t.projectId === projectId && !t.parentId && !t.deletedAt),
+    [storeTasks, projectId]
+  );
   const taskDeps = useAppStore((s) => s.taskDeps);
   const updateTask = useAppStore((s) => s.updateTask);
 

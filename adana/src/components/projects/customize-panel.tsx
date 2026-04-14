@@ -380,7 +380,11 @@ function FormsCard({ projectId }: { projectId: string }) {
 // ---------------------------------------------------------------------------
 
 function TaskTypesCard({ projectId }: { projectId: string }) {
-  const taskTypes = useAppStore((s) => s.getProjectTaskTypes(projectId));
+  const allTaskTypes = useAppStore((s: any) => s.taskTypes || []);
+  const taskTypes = React.useMemo(
+    () => (allTaskTypes as any[]).filter((t: any) => t.projectId === projectId),
+    [allTaskTypes, projectId]
+  );
   const createTaskType = useAppStore((s) => s.createTaskType);
   const deleteTaskType = useAppStore((s) => s.deleteTaskType);
 

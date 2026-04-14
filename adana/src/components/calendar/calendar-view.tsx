@@ -52,7 +52,11 @@ export function CalendarView({
   onTaskClick,
   className,
 }: CalendarViewProps) {
-  const tasks = useAppStore((s) => s.getProjectTasks(projectId));
+  const allTasks = useAppStore((s) => s.tasks);
+  const tasks = useMemo(
+    () => allTasks.filter((t: any) => t.projectId === projectId && !t.parentId && !t.deletedAt),
+    [allTasks, projectId]
+  );
   const updateTask = useAppStore((s) => s.updateTask);
   const createTask = useAppStore((s) => s.createTask);
 

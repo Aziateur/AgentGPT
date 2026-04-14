@@ -47,8 +47,16 @@ export function BoardView({
   className,
 }: BoardViewProps) {
   // -- Store selectors ------------------------------------------------------
-  const sections = useAppStore((s) => s.getProjectSections(projectId));
-  const tasks = useAppStore((s) => s.getProjectTasks(projectId));
+  const allSections = useAppStore((s) => s.sections);
+  const allTasks = useAppStore((s) => s.tasks);
+  const sections = React.useMemo(
+    () => allSections.filter((x: any) => x.projectId === projectId),
+    [allSections, projectId]
+  );
+  const tasks = React.useMemo(
+    () => allTasks.filter((t: any) => t.projectId === projectId && !t.parentId && !t.deletedAt),
+    [allTasks, projectId]
+  );
   const storeUsers = useAppStore((s) => s.users);
   const storeTags = useAppStore((s) => s.tags);
   const storeTaskTags = useAppStore((s) => s.taskTags);
