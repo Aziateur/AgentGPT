@@ -438,7 +438,6 @@ export function Header() {
                   <button
                     onClick={() => {
                       useDataStore.getState().logout();
-                      useAppStore.getState().setCurrentUser(null);
                       router.push("/login");
                     }}
                     className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"

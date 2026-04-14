@@ -192,16 +192,19 @@ export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: Si
   const [inviteOpen, setInviteOpen] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
 
-  // Compute trial days left from currentUser.createdAt
-  const trialDaysLeft = (() => {
+  // Compute trial days left from currentUser.createdAt (client-only to avoid hydration mismatch)
+  const [trialDaysLeft, setTrialDaysLeft] = useState(30);
+  useEffect(() => {
     const createdAt = (currentUser as any)?.createdAt;
-    if (!createdAt) return 30;
+    if (!createdAt) return;
     const created = new Date(createdAt).getTime();
-    if (isNaN(created)) return 30;
+    if (isNaN(created)) return;
     const daysSince = Math.floor((Date.now() - created) / (1000 * 60 * 60 * 24));
-    return 30 - daysSince;
-  })();
-  const showTrialBar = trialDaysLeft > 0 && trialDaysLeft <= 30;
+    setTrialDaysLeft(30 - daysSince);
+  }, [currentUser]);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  const showTrialBar = mounted && trialDaysLeft > 0 && trialDaysLeft <= 30;
 
   // Hydrate collapsed state from dedicated localStorage key (requirement)
   useEffect(() => {
