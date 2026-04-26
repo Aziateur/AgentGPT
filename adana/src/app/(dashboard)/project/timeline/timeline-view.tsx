@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAppStore } from "@/store/app-store";
+import { useTaskDetailPanel } from "@/hooks/use-task-detail-panel";
 import type { Task, Section } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -61,6 +62,7 @@ export default function ProjectTimelinePage() {
   const projectId = searchParams?.get("id") as string;
 
   const { getProjectTasks, getProjectSections, users } = useAppStore();
+  const { openTask } = useTaskDetailPanel();
 
   const sections = getProjectSections(projectId);
   const tasks = getProjectTasks(projectId);
@@ -230,7 +232,11 @@ export default function ProjectTimelinePage() {
               const assigneeName = getAssigneeName(task.assigneeId);
 
               return (
-                <div key={task.id} className="flex items-center">
+                <div
+                  key={task.id}
+                  onClick={() => openTask(task.id)}
+                  className="flex cursor-pointer items-center hover:bg-gray-50"
+                >
                   {/* Task label */}
                   <div className="w-52 shrink-0 pr-3">
                     <div className="flex items-center gap-2">
@@ -257,7 +263,11 @@ export default function ProjectTimelinePage() {
                     ))}
                     {/* Bar */}
                     <div
-                      className="absolute top-1 flex h-6 items-center rounded-md px-2 text-[10px] font-medium text-white"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openTask(task.id);
+                      }}
+                      className="absolute top-1 flex h-6 cursor-pointer items-center rounded-md px-2 text-[10px] font-medium text-white"
                       style={{
                         left: `${(startDay / totalDays) * 100}%`,
                         width: `${(durationDays / totalDays) * 100}%`,

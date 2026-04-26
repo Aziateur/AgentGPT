@@ -6,6 +6,7 @@ import { useAppStore } from "@/store/app-store";
 import { installRuleEngine } from "@/lib/rules/hook";
 import { ThemeProvider } from "@/components/theme-provider";
 import { CommandPalette } from "@/components/command-palette";
+import { TaskDetailHost } from "@/components/tasks/task-detail-host";
 import { useShortcuts } from "@/hooks/use-shortcuts";
 
 export default function DashboardRootLayout({
@@ -55,6 +56,7 @@ export default function DashboardRootLayout({
         {children}
       </DashboardLayout>
       <CommandPalette />
+      <TaskDetailHost />
     </ThemeProvider>
   );
 }

@@ -14,6 +14,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useAppStore } from "@/store/app-store";
+import { useTaskDetailPanel } from "@/hooks/use-task-detail-panel";
 import type { Task } from "@/types";
 
 // -- Helpers ------------------------------------------------------------------
@@ -172,6 +173,8 @@ export default function MyTasksPage() {
   const toggleTaskComplete = useAppStore((s) => s.toggleTaskComplete);
   const loading = useAppStore((s) => s.loading);
 
+  const { openTask } = useTaskDetailPanel();
+
   const rawMyTasks = useMemo(
     () => allTasks.filter((t) => t.assigneeId === currentUser.id),
     [allTasks, currentUser.id]
@@ -247,6 +250,7 @@ export default function MyTasksPage() {
           tasks={myTasks}
           onToggleComplete={(id) => toggleTaskComplete(id)}
           onCreate={(title) => createTask({ title, assigneeId: currentUser.id })}
+          onOpenTask={openTask}
         />
       )}
       {activeView === "board" && (
@@ -254,16 +258,18 @@ export default function MyTasksPage() {
           tasks={myTasks}
           onToggleComplete={(id) => toggleTaskComplete(id)}
           onMove={(id, dueDate) => updateTask(id, { dueDate })}
+          onOpenTask={openTask}
         />
       )}
       {activeView === "calendar" && (
-        <CalendarWeekView tasks={myTasks} />
+        <CalendarWeekView tasks={myTasks} onOpenTask={openTask} />
       )}
       {activeView === "files" && (
         <FilesView
           tasks={myTasks}
           attachments={attachments}
           projects={projects}
+          onOpenTask={openTask}
         />
       )}
       {activeView === "dashboard" && (
@@ -279,10 +285,12 @@ function ListView({
   tasks,
   onToggleComplete,
   onCreate,
+  onOpenTask,
 }: {
   tasks: Task[];
   onToggleComplete: (id: string) => void;
   onCreate: (title: string) => void;
+  onOpenTask: (id: string) => void;
 }) {
   const now = new Date();
   const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
@@ -325,6 +333,7 @@ function ListView({
           tasks={b.items}
           onToggleComplete={onToggleComplete}
           onCreate={onCreate}
+          onOpenTask={onOpenTask}
         />
       ))}
     </div>
@@ -336,11 +345,13 @@ function ListSection({
   tasks,
   onToggleComplete,
   onCreate,
+  onOpenTask,
 }: {
   title: string;
   tasks: Task[];
   onToggleComplete: (id: string) => void;
   onCreate: (title: string) => void;
+  onOpenTask: (id: string) => void;
 }) {
   const [open, setOpen] = useState(true);
   const [adding, setAdding] = useState(false);
@@ -422,10 +433,14 @@ function ListSection({
               {tasks.map((task) => (
                 <li
                   key={task.id}
-                  className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50"
+                  onClick={() => onOpenTask(task.id)}
+                  className="flex cursor-pointer items-center gap-3 px-5 py-3 hover:bg-gray-50"
                 >
                   <button
-                    onClick={() => onToggleComplete(task.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleComplete(task.id);
+                    }}
                     className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition ${
                       task.completed
                         ? "border-green-500 bg-green-500 text-white"
@@ -496,10 +511,12 @@ function BoardView({
   tasks,
   onToggleComplete,
   onMove,
+  onOpenTask,
 }: {
   tasks: Task[];
   onToggleComplete: (id: string) => void;
   onMove: (id: string, dueDate: string | null) => void;
+  onOpenTask: (id: string) => void;
 }) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
@@ -556,7 +573,11 @@ function BoardView({
                   draggable
                   onDragStart={() => setDraggingId(t.id)}
                   onDragEnd={() => setDraggingId(null)}
-                  className="cursor-grab rounded-lg border border-gray-200 bg-white p-3 shadow-sm hover:shadow transition"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenTask(t.id);
+                  }}
+                  className="cursor-pointer rounded-lg border border-gray-200 bg-white p-3 shadow-sm hover:shadow transition"
                 >
                   <p
                     className={`text-sm font-medium ${
@@ -592,7 +613,13 @@ function BoardView({
 
 // -- Calendar view (weekly) --------------------------------------------------
 
-function CalendarWeekView({ tasks }: { tasks: Task[] }) {
+function CalendarWeekView({
+  tasks,
+  onOpenTask,
+}: {
+  tasks: Task[];
+  onOpenTask: (id: string) => void;
+}) {
   const [weekStart, setWeekStart] = useState<Date>(() => {
     const today = startOfDay(new Date());
     const day = today.getDay();
@@ -604,9 +631,7 @@ function CalendarWeekView({ tasks }: { tasks: Task[] }) {
   });
 
   function openTask(taskId: string) {
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("adana:open-task", { detail: { taskId } }));
-    }
+    onOpenTask(taskId);
   }
 
   const weekLabel = `${formatDate(days[0].toISOString())} – ${formatDate(days[6].toISOString())}`;
@@ -702,10 +727,12 @@ function FilesView({
   tasks,
   attachments,
   projects,
+  onOpenTask,
 }: {
   tasks: Task[];
   attachments: { id: string; taskId?: string | null; filename: string; sizeBytes?: number | null; createdAt: string; publicUrl?: string | null }[];
   projects: { id: string; name: string }[];
+  onOpenTask: (id: string) => void;
 }) {
   const taskIds = useMemo(() => new Set(tasks.map((t) => t.id)), [tasks]);
   const tasksById = useMemo(() => {
@@ -759,7 +786,18 @@ function FilesView({
                     <span className="font-medium text-gray-900">{f.filename}</span>
                   )}
                 </td>
-                <td className="px-5 py-3 text-gray-700">{task?.title || "—"}</td>
+                <td className="px-5 py-3 text-gray-700">
+                  {task ? (
+                    <button
+                      onClick={() => onOpenTask(task.id)}
+                      className="text-left text-indigo-600 hover:underline"
+                    >
+                      {task.title}
+                    </button>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td className="px-5 py-3 text-gray-600">{projectName || "—"}</td>
                 <td className="px-5 py-3 text-gray-600">{formatBytes(f.sizeBytes)}</td>
                 <td className="px-5 py-3 text-gray-600">{formatDate(f.createdAt)}</td>

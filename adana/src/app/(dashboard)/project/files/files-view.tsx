@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Download, Trash2, FileText, Image as ImageIcon, File as FileIcon, Paperclip } from "lucide-react";
 import { useAppStore } from "@/store/app-store";
+import { useTaskDetailPanel } from "@/hooks/use-task-detail-panel";
 import type { AttachmentFile } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -104,6 +105,8 @@ export default function FilesViewClient() {
   const tasks = useAppStore((s) => s.tasks);
   const users = useAppStore((s) => s.users);
   const deleteAttachment = useAppStore((s) => s.deleteAttachment);
+
+  const { openTask } = useTaskDetailPanel();
 
   const [filter, setFilter] = useState<FileCategory>("all");
 
@@ -248,12 +251,13 @@ export default function FilesViewClient() {
                         <td className="px-4 py-3 text-gray-600">{formatDate(a.createdAt)}</td>
                         <td className="px-4 py-3">
                           {task ? (
-                            <span
-                              className="truncate text-indigo-600 hover:underline"
+                            <button
+                              onClick={() => openTask(task.id)}
+                              className="cursor-pointer truncate text-left text-indigo-600 hover:underline"
                               title={task.title}
                             >
                               {task.title}
-                            </span>
+                            </button>
                           ) : (
                             <span className="text-gray-400">—</span>
                           )}
