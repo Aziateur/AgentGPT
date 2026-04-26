@@ -11,14 +11,10 @@ import {
   Briefcase,
   Target,
   BarChart3,
-  Plus,
   Menu,
   UserPlus,
-  Users,
   Sparkles,
   Star,
-  ChevronDown,
-  Settings as SettingsIcon,
   Trash2,
   X,
 } from "lucide-react";
@@ -26,6 +22,19 @@ import { useAppStore } from "@/stores/app-store";
 import { useAppStore as useDataStore } from "@/store/app-store";
 import { cn } from "@/lib/utils";
 import { InviteModal } from "@/components/invite-modal";
+import {
+  SidebarCreateButton,
+  SidebarCreateMenu,
+  InsightsAddMenu,
+  ProjectAddMenu,
+  type CreateMenuAction,
+} from "./sidebar-create-menu";
+import { SidebarSection, SidebarAddButton } from "./sidebar-section";
+import { SidebarStarredList, type StarredItem } from "./sidebar-starred";
+import {
+  SidebarProjectsList,
+  type SidebarProjectRow,
+} from "./sidebar-projects";
 
 // ---------------------------------------------------------------------------
 // Animation variants
@@ -42,7 +51,7 @@ const fadeVariants = {
 };
 
 // ---------------------------------------------------------------------------
-// Props for real data from server
+// Props
 // ---------------------------------------------------------------------------
 
 interface SidebarProps {
@@ -52,7 +61,7 @@ interface SidebarProps {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-components
+// Top-level NavItem (Home / My tasks / Inbox / Insights items)
 // ---------------------------------------------------------------------------
 
 interface NavItemProps {
@@ -60,23 +69,36 @@ interface NavItemProps {
   icon: React.ReactNode;
   label: string;
   badge?: number;
+  badgeDot?: boolean;
   collapsed: boolean;
   active?: boolean;
 }
 
-function NavItem({ href, icon, label, badge, collapsed, active }: NavItemProps) {
+function NavItem({
+  href,
+  icon,
+  label,
+  badge,
+  badgeDot,
+  collapsed,
+  active,
+}: NavItemProps) {
   return (
     <Link
       href={href}
       className={cn(
-        "group flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+        "group relative flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
         "text-sidebar-text hover:bg-sidebar-hover hover:text-sidebar-text-active",
         active && "bg-sidebar-active text-sidebar-text-active",
         collapsed && "justify-center px-0"
       )}
+      title={collapsed ? label : undefined}
     >
-      <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center">
+      <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
         {icon}
+        {badgeDot && collapsed && (
+          <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-sidebar-bg" />
+        )}
       </span>
       <AnimatePresence>
         {!collapsed && (
@@ -92,121 +114,36 @@ function NavItem({ href, icon, label, badge, collapsed, active }: NavItemProps) 
           </motion.span>
         )}
       </AnimatePresence>
-      {badge !== undefined && badge > 0 && !collapsed && (
-        <motion.span
-          variants={fadeVariants}
-          initial="hidden"
-          animate="visible"
-          exit="hidden"
-          className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-adana-600 px-1.5 text-[11px] font-semibold text-white"
-        >
+      {!collapsed && badgeDot && (
+        <span className="h-2 w-2 flex-shrink-0 rounded-full bg-red-500" />
+      )}
+      {!collapsed && badge !== undefined && badge > 0 && (
+        <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-adana-600 px-1.5 text-[11px] font-semibold text-white">
           {badge}
-        </motion.span>
+        </span>
       )}
     </Link>
   );
 }
 
-function SectionHeader({
-  label,
-  collapsed,
-  onAdd,
-}: {
-  label: string;
-  collapsed: boolean;
-  onAdd?: () => void;
-}) {
-  if (collapsed) return <div className="my-1 h-px bg-sidebar-hover" />;
-
-  return (
-    <div className="flex items-center justify-between px-2.5 pb-1 pt-3">
-      <motion.span
-        variants={fadeVariants}
-        initial="hidden"
-        animate="visible"
-        exit="hidden"
-        className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-text"
-      >
-        {label}
-      </motion.span>
-      {onAdd && (
-        <button
-          onClick={onAdd}
-          className="flex h-5 w-5 items-center justify-center rounded text-sidebar-text transition-colors hover:bg-sidebar-hover hover:text-sidebar-text-active"
-          aria-label={`Add ${label.toLowerCase()}`}
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
-      )}
-    </div>
-  );
-}
-
-function CollapsibleSectionHeader({
-  label,
-  collapsed,
-  open,
-  onToggle,
-}: {
-  label: string;
-  collapsed: boolean;
-  open: boolean;
-  onToggle: () => void;
-}) {
-  if (collapsed) return <div className="my-1 h-px bg-sidebar-hover" />;
-  return (
-    <button
-      onClick={onToggle}
-      className="flex w-full items-center gap-1 px-2.5 pb-1 pt-3 text-left"
-    >
-      <ChevronDown
-        className={cn(
-          "h-3 w-3 text-sidebar-text transition-transform",
-          !open && "-rotate-90"
-        )}
-      />
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-text">
-        {label}
-      </span>
-    </button>
-  );
-}
-
-function Separator() {
-  return <div className="mx-2.5 my-1.5 h-px bg-sidebar-hover" />;
-}
-
 // ---------------------------------------------------------------------------
-// Sidebar component
+// Sidebar
 // ---------------------------------------------------------------------------
 
 const LS_KEY = "adana:sidebar-collapsed";
+const LS_STARRED_PORTFOLIOS = "adana:starred-portfolios";
 
-export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: SidebarProps) {
+export function Sidebar({
+  projects: propProjects = [],
+  notificationCount = 0,
+}: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { currentUser, sidebarCollapsed, toggleSidebar, setSidebarCollapsed } = useAppStore();
+  const { currentUser, sidebarCollapsed, toggleSidebar, setSidebarCollapsed } =
+    useAppStore();
 
-  const [insightsOpen, setInsightsOpen] = useState(true);
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
-
-  // Compute trial days left from currentUser.createdAt (client-only to avoid hydration mismatch)
-  const [trialDaysLeft, setTrialDaysLeft] = useState(30);
-  const createdAt = (currentUser as any)?.createdAt as string | undefined;
-  useEffect(() => {
-    if (!createdAt) return;
-    const created = new Date(createdAt).getTime();
-    if (isNaN(created)) return;
-    const daysSince = Math.floor((Date.now() - created) / (1000 * 60 * 60 * 24));
-    setTrialDaysLeft(30 - daysSince);
-  }, [createdAt]);
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
-  const showTrialBar = mounted && trialDaysLeft > 0 && trialDaysLeft <= 30;
-
-  // Hydrate collapsed state from dedicated localStorage key (requirement)
+  // Collapsed-state hydration & persistence
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -230,74 +167,221 @@ export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: Si
     }
   }, [sidebarCollapsed]);
 
-  // Prefer visible projects from data store if available.
-  // IMPORTANT: selector must return a stable ref when state hasn't changed; otherwise
-  // zustand re-renders indefinitely (React #185). Subscribe to raw state slices, filter in useMemo.
+  // ----- Data -------------------------------------------------------------
   const rawStoreProjects = useDataStore((s: any) => s.projects);
   const projectMembers = useDataStore((s: any) => s.projectMembers);
   const currentUserId = useDataStore((s: any) => s.currentUser?.id);
+  const sectionsAll = useDataStore((s: any) => s.sections);
+  const portfoliosExt = useDataStore((s: any) => s.portfoliosExt);
+  const notificationsExt = useDataStore((s: any) => s.notificationsExt);
+  const notificationsLegacy = useDataStore((s: any) => s.notifications);
+
+  // Visible-to-current-user projects (creator OR member)
   const visibleProjects = useMemo(() => {
-    if (!currentUserId) return rawStoreProjects;
+    const list = (rawStoreProjects as any[]) || [];
+    if (!currentUserId) return list;
     const memberIds = new Set<string>(
-      (projectMembers || []).filter((m: any) => m.userId === currentUserId).map((m: any) => m.projectId)
+      (projectMembers || [])
+        .filter((m: any) => m.userId === currentUserId)
+        .map((m: any) => m.projectId)
     );
-    return (rawStoreProjects || []).filter(
+    return list.filter(
       (p: any) => p.creatorId === currentUserId || memberIds.has(p.id)
     );
   }, [rawStoreProjects, projectMembers, currentUserId]);
-  const sourceProjects: Array<Record<string, unknown>> =
-    (visibleProjects as Array<Record<string, unknown>> | undefined) ?? projects;
 
-  // Map to display shape
-  const allProjects = sourceProjects.map((p) => ({
-    id: p.id as string,
-    name: p.name as string,
-    color: (p.color as string) || "#6366f1",
-    isFavorite: Boolean(p.favorite),
-  }));
+  const sourceProjects: any[] =
+    visibleProjects.length > 0
+      ? visibleProjects
+      : ((propProjects as any[]) ?? []);
 
-  const starredProjects = allProjects.filter((p) => p.isFavorite);
-  const otherProjects = allProjects.filter((p) => !p.isFavorite).slice(0, 8);
-
-  const allTeams = teams.map((t) => ({
-    id: t.id as string,
-    name: t.name as string,
-  }));
-
-  const renderProjectLink = (project: { id: string; name: string; color: string }) => (
-    <Link
-      key={project.id}
-      href={`/project/list?id=${project.id}`}
-      className={cn(
-        "group flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors",
-        "text-sidebar-text hover:bg-sidebar-hover hover:text-sidebar-text-active",
-        pathname.startsWith(`/project/`) &&
-          searchParams?.get("id") === project.id &&
-          "bg-sidebar-active text-sidebar-text-active",
-        sidebarCollapsed && "justify-center px-0"
-      )}
-    >
-      <span
-        className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
-        style={{ backgroundColor: project.color }}
-      />
-      <AnimatePresence>
-        {!sidebarCollapsed && (
-          <motion.span
-            variants={fadeVariants}
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
-            transition={{ duration: 0.15 }}
-            className="truncate"
-          >
-            {project.name}
-          </motion.span>
-        )}
-      </AnimatePresence>
-    </Link>
+  // Map to display rows
+  const allProjects = useMemo(
+    () =>
+      sourceProjects.map((p) => ({
+        id: p.id as string,
+        name: p.name as string,
+        color: (p.color as string) || "#4c6ef5",
+        icon: (p.icon as string) || "folder",
+        favorite: Boolean(p.favorite),
+        archived: Boolean(p.archived),
+      })),
+    [sourceProjects]
   );
 
+  // Active project id from query string or pathname segment
+  const activeProjectId = useMemo(() => {
+    const qid = searchParams?.get("id");
+    if (qid) return qid;
+    const m = pathname.match(/^\/projects\/([^/]+)/);
+    return m ? m[1] : null;
+  }, [searchParams, pathname]);
+
+  const projectRows: SidebarProjectRow[] = useMemo(
+    () =>
+      allProjects
+        .filter((p) => !p.archived)
+        .slice(0, 12)
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          color: p.color,
+          icon: p.icon,
+          href: `/projects/${p.id}/list`,
+          active: activeProjectId === p.id,
+        })),
+    [allProjects, activeProjectId]
+  );
+
+  // Starred items (favorite projects + starred portfolios from localStorage)
+  const [starredPortfolioIds, setStarredPortfolioIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(LS_STARRED_PORTFOLIOS);
+      if (raw) setStarredPortfolioIds(JSON.parse(raw));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const starredItems: StarredItem[] = useMemo(() => {
+    const out: StarredItem[] = [];
+    for (const p of allProjects) {
+      if (!p.favorite || p.archived) continue;
+      const subs = ((sectionsAll as any[]) || [])
+        .filter((s) => s.projectId === p.id)
+        .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+        .map((s) => ({ id: s.id, name: s.name }));
+      out.push({
+        id: p.id,
+        name: p.name,
+        color: p.color,
+        icon: p.icon,
+        kind: "project",
+        subItems: subs,
+        href: `/projects/${p.id}/list`,
+        detailsHref: `/projects/${p.id}/overview`,
+        active: activeProjectId === p.id,
+      });
+    }
+    const starredSet = new Set(starredPortfolioIds);
+    for (const pf of (portfoliosExt as any[]) || []) {
+      if (!starredSet.has(pf.id)) continue;
+      out.push({
+        id: pf.id,
+        name: pf.name,
+        color: pf.color || "#7c3aed",
+        icon: "briefcase",
+        kind: "portfolio",
+        href: `/portfolios?id=${pf.id}`,
+        detailsHref: `/portfolios?id=${pf.id}`,
+      });
+    }
+    return out;
+  }, [
+    allProjects,
+    sectionsAll,
+    portfoliosExt,
+    starredPortfolioIds,
+    activeProjectId,
+  ]);
+
+  // Inbox red-dot: any unread notification
+  const hasUnread = useMemo(() => {
+    const ext = (notificationsExt as any[]) || [];
+    if (ext.some((n) => !n.read && !n.archived)) return true;
+    const legacy = (notificationsLegacy as any[]) || [];
+    if (legacy.some((n) => !n.read && !n.archived)) return true;
+    return notificationCount > 0;
+  }, [notificationsExt, notificationsLegacy, notificationCount]);
+
+  // ----- Modals & menus ---------------------------------------------------
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const [insightsAddOpen, setInsightsAddOpen] = useState(false);
+  const [projectsAddOpen, setProjectsAddOpen] = useState(false);
+
+  // Trial pill
+  const [trialDaysLeft, setTrialDaysLeft] = useState(30);
+  const createdAt = (currentUser as any)?.createdAt as string | undefined;
+  useEffect(() => {
+    if (!createdAt) return;
+    const created = new Date(createdAt).getTime();
+    if (isNaN(created)) return;
+    const daysSince = Math.floor(
+      (Date.now() - created) / (1000 * 60 * 60 * 24)
+    );
+    setTrialDaysLeft(Math.max(0, 30 - daysSince));
+  }, [createdAt]);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  const showTrialBar = mounted && trialDaysLeft > 0 && trialDaysLeft <= 30;
+
+  // ----- Action dispatchers ----------------------------------------------
+  const dispatchCustom = (name: string, detail?: unknown) => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent(name, { detail }));
+  };
+
+  const handleCreateAction = (action: CreateMenuAction) => {
+    switch (action) {
+      case "task":
+        dispatchCustom("adana:create-task");
+        break;
+      case "project":
+        router.push("/projects?new=1");
+        dispatchCustom("adana:create-project");
+        break;
+      case "message":
+        router.push("/inbox?compose=1");
+        dispatchCustom("adana:compose-message");
+        break;
+      case "portfolio":
+        router.push("/portfolios?new=1");
+        dispatchCustom("adana:create-portfolio");
+        break;
+      case "goal":
+        router.push("/goals?new=1");
+        dispatchCustom("adana:create-goal");
+        break;
+      case "invite":
+        setInviteOpen(true);
+        break;
+    }
+  };
+
+  const handleInsightsAdd = (action: "report" | "portfolio" | "goal") => {
+    switch (action) {
+      case "report":
+        router.push("/reporting?new=1");
+        dispatchCustom("adana:create-report");
+        break;
+      case "portfolio":
+        router.push("/portfolios?new=1");
+        dispatchCustom("adana:create-portfolio");
+        break;
+      case "goal":
+        router.push("/goals?new=1");
+        dispatchCustom("adana:create-goal");
+        break;
+    }
+  };
+
+  const handleProjectsAdd = (action: "project" | "portfolio") => {
+    if (action === "project") {
+      router.push("/projects?new=1");
+      dispatchCustom("adana:create-project");
+    } else {
+      router.push("/portfolios?new=1");
+      dispatchCustom("adana:create-portfolio");
+    }
+  };
+
+  // ---------------------------------------------------------------------
   return (
     <motion.aside
       variants={sidebarVariants}
@@ -305,7 +389,7 @@ export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: Si
       transition={{ duration: 0.2, ease: "easeInOut" }}
       className="fixed left-0 top-0 z-30 flex h-screen flex-col overflow-hidden bg-sidebar-bg"
     >
-      {/* Top: Hamburger toggle + Logo ---------------------------------- */}
+      {/* Top: Hamburger + Logo --------------------------------------------- */}
       <div
         className={cn(
           "flex items-center gap-2.5 border-b border-sidebar-hover px-2 py-3",
@@ -345,48 +429,23 @@ export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: Si
         </AnimatePresence>
       </div>
 
-      {/* User avatar + name ----------------------------------------------- */}
-      {currentUser && (
-        <div
-          className={cn(
-            "flex items-center gap-2.5 px-3 py-2",
-            sidebarCollapsed && "justify-center px-0"
-          )}
-        >
-          {currentUser.avatar ? (
-            <img
-              src={currentUser.avatar}
-              alt={currentUser.name}
-              className="h-6 w-6 flex-shrink-0 rounded-full object-cover"
-            />
-          ) : (
-            <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-adana-600 text-[11px] font-semibold text-white">
-              {currentUser.name
-                .split(" ")
-                .map((n) => n[0])
-                .join("")
-                .slice(0, 2)}
-            </div>
-          )}
-          <AnimatePresence>
-            {!sidebarCollapsed && (
-              <motion.span
-                variants={fadeVariants}
-                initial="hidden"
-                animate="visible"
-                exit="hidden"
-                transition={{ duration: 0.15 }}
-                className="truncate text-sm text-sidebar-text-active"
-              >
-                {currentUser.name}
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
+      {/* Create button ------------------------------------------------------ */}
+      <div className={cn("relative px-2 py-2", sidebarCollapsed && "px-0")}>
+        <SidebarCreateButton
+          collapsed={sidebarCollapsed}
+          onClick={() => setCreateMenuOpen((v) => !v)}
+        />
+        <SidebarCreateMenu
+          open={createMenuOpen}
+          onClose={() => setCreateMenuOpen(false)}
+          onSelect={handleCreateAction}
+          collapsed={sidebarCollapsed}
+        />
+      </div>
 
-      {/* Main navigation -------------------------------------------------- */}
+      {/* Main scrollable area ---------------------------------------------- */}
       <nav className="flex-1 overflow-y-auto overflow-x-hidden px-1.5 py-1">
+        {/* Top group ------------------------------------------------------- */}
         <NavItem
           href="/home"
           icon={<House className="h-4 w-4" />}
@@ -397,7 +456,7 @@ export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: Si
         <NavItem
           href="/my-tasks"
           icon={<CheckCircle className="h-4 w-4" />}
-          label="My Tasks"
+          label="My tasks"
           collapsed={sidebarCollapsed}
           active={pathname === "/my-tasks"}
         />
@@ -405,128 +464,116 @@ export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: Si
           href="/inbox"
           icon={<Bell className="h-4 w-4" />}
           label="Inbox"
-          badge={notificationCount}
           collapsed={sidebarCollapsed}
           active={pathname === "/inbox"}
-        />
-        <NavItem
-          href="/goals"
-          icon={<Target className="h-4 w-4" />}
-          label="Goals"
-          collapsed={sidebarCollapsed}
-          active={pathname === "/goals"}
+          badgeDot={hasUnread}
         />
 
-        <Separator />
-
-        {/* Insights group: Reporting + Portfolios ------------------------ */}
-        <CollapsibleSectionHeader
+        {/* Insights -------------------------------------------------------- */}
+        <SidebarSection
           label="Insights"
           collapsed={sidebarCollapsed}
-          open={insightsOpen}
-          onToggle={() => setInsightsOpen((v) => !v)}
-        />
-        {(insightsOpen || sidebarCollapsed) && (
+          defaultOpen
+          renderAddButton={() => (
+            <span className="relative">
+              <SidebarAddButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setInsightsAddOpen((v) => !v);
+                }}
+                ariaLabel="New insights"
+              />
+              <InsightsAddMenu
+                open={insightsAddOpen}
+                onClose={() => setInsightsAddOpen(false)}
+                onSelect={handleInsightsAdd}
+              />
+            </span>
+          )}
+        >
+          <NavItem
+            href="/reporting"
+            icon={<BarChart3 className="h-4 w-4" />}
+            label="Reporting"
+            collapsed={sidebarCollapsed}
+            active={pathname === "/reporting"}
+          />
+          <NavItem
+            href="/portfolios"
+            icon={<Briefcase className="h-4 w-4" />}
+            label="Portfolios"
+            collapsed={sidebarCollapsed}
+            active={pathname.startsWith("/portfolios")}
+          />
+          <NavItem
+            href="/goals"
+            icon={<Target className="h-4 w-4" />}
+            label="Goals"
+            collapsed={sidebarCollapsed}
+            active={pathname.startsWith("/goals")}
+          />
+        </SidebarSection>
+
+        {/* Starred --------------------------------------------------------- */}
+        {starredItems.length > 0 && !sidebarCollapsed && (
+          <SidebarSection
+            label="Starred"
+            collapsed={sidebarCollapsed}
+            defaultOpen
+          >
+            <SidebarStarredList items={starredItems} collapsed={false} />
+          </SidebarSection>
+        )}
+        {starredItems.length > 0 && sidebarCollapsed && (
           <>
-            <NavItem
-              href="/reporting"
-              icon={<BarChart3 className="h-4 w-4" />}
-              label="Reporting"
-              collapsed={sidebarCollapsed}
-              active={pathname === "/reporting"}
-            />
-            <NavItem
-              href="/portfolios"
-              icon={<Briefcase className="h-4 w-4" />}
-              label="Portfolios"
-              collapsed={sidebarCollapsed}
-              active={pathname === "/portfolios"}
-            />
+            <div className="my-1 flex items-center justify-center">
+              <Star className="h-3 w-3 text-sidebar-text" />
+            </div>
+            <SidebarStarredList items={starredItems} collapsed />
           </>
         )}
 
-        <NavItem
-          href="/settings/ai"
-          icon={<Sparkles className="h-4 w-4" />}
-          label="AI Settings"
-          collapsed={sidebarCollapsed}
-          active={pathname === "/settings/ai" || pathname.startsWith("/settings/ai")}
-        />
-
-        <Separator />
-
-        {/* Starred projects ---------------------------------------------- */}
-        {starredProjects.length > 0 && (
-          <>
-            {!sidebarCollapsed && (
-              <div className="flex items-center gap-1.5 px-2.5 pb-1 pt-3">
-                <Star className="h-3 w-3 text-sidebar-text" />
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-text">
-                  Starred
-                </span>
-              </div>
-            )}
-            {sidebarCollapsed && <div className="my-1 h-px bg-sidebar-hover" />}
-            {starredProjects.map(renderProjectLink)}
-          </>
-        )}
-
-        {/* Projects ------------------------------------------------------ */}
-        <SectionHeader
+        {/* Projects -------------------------------------------------------- */}
+        <SidebarSection
           label="Projects"
           collapsed={sidebarCollapsed}
-          onAdd={() => router.push("/projects")}
-        />
-        {otherProjects.map(renderProjectLink)}
-
-        <Separator />
-
-        {/* Teams --------------------------------------------------------- */}
-        {allTeams.length > 0 && (
-          <>
-            <SectionHeader label="Teams" collapsed={sidebarCollapsed} />
-            {allTeams.map((team) => (
+          defaultOpen
+          renderAddButton={() => (
+            <span className="relative">
+              <SidebarAddButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setProjectsAddOpen((v) => !v);
+                }}
+                ariaLabel="New project or portfolio"
+              />
+              <ProjectAddMenu
+                open={projectsAddOpen}
+                onClose={() => setProjectsAddOpen(false)}
+                onSelect={handleProjectsAdd}
+              />
+            </span>
+          )}
+        >
+          <SidebarProjectsList
+            projects={projectRows}
+            collapsed={sidebarCollapsed}
+          />
+          {!sidebarCollapsed && projectRows.length > 0 && (
+            <div className="px-1.5 pt-1">
               <Link
-                key={team.id}
-                href={`/teams/${team.id}`}
-                className={cn(
-                  "group flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors",
-                  "text-sidebar-text hover:bg-sidebar-hover hover:text-sidebar-text-active",
-                  pathname === `/teams/${team.id}` &&
-                    "bg-sidebar-active text-sidebar-text-active",
-                  sidebarCollapsed && "justify-center px-0"
-                )}
+                href="/projects"
+                className="block rounded px-1.5 py-1 text-[11px] text-sidebar-text hover:bg-sidebar-hover hover:text-sidebar-text-active"
               >
-                <Users className="h-4 w-4 flex-shrink-0" />
-                <AnimatePresence>
-                  {!sidebarCollapsed && (
-                    <motion.span
-                      variants={fadeVariants}
-                      initial="hidden"
-                      animate="visible"
-                      exit="hidden"
-                      transition={{ duration: 0.15 }}
-                      className="truncate"
-                    >
-                      {team.name}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
+                Show all projects
               </Link>
-            ))}
-          </>
-        )}
+            </div>
+          )}
+        </SidebarSection>
       </nav>
 
-      {/* Bottom actions --------------------------------------------------- */}
+      {/* Footer ------------------------------------------------------------ */}
       <div className="border-t border-sidebar-hover px-1.5 py-2 space-y-0.5">
-        <NavItem
-          href="/settings"
-          icon={<SettingsIcon className="h-4 w-4" />}
-          label="Settings"
-          collapsed={sidebarCollapsed}
-          active={pathname === "/settings" || (pathname.startsWith("/settings/") && !pathname.startsWith("/settings/ai"))}
-        />
         <NavItem
           href="/trash"
           icon={<Trash2 className="h-4 w-4" />}
@@ -540,6 +587,8 @@ export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: Si
             "flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-sidebar-text transition-colors hover:bg-sidebar-hover hover:text-sidebar-text-active",
             sidebarCollapsed && "justify-center px-0"
           )}
+          title={sidebarCollapsed ? "Invite teammates" : undefined}
+          aria-label="Invite teammates"
         >
           <UserPlus className="h-4 w-4 flex-shrink-0" />
           <AnimatePresence>
@@ -557,17 +606,16 @@ export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: Si
           </AnimatePresence>
         </button>
 
-        {/* Trial status bar */}
         {showTrialBar && !sidebarCollapsed && (
           <div className="mt-2 rounded-md border border-sidebar-hover bg-sidebar-hover/40 p-2.5">
             <div className="flex items-center gap-1.5">
               <Sparkles className="h-3.5 w-3.5 text-amber-400" />
               <span className="text-[11px] font-semibold text-sidebar-text-active">
-                {trialDaysLeft} day{trialDaysLeft === 1 ? "" : "s"} left
+                Adana Pro trial
               </span>
             </div>
             <p className="mt-0.5 text-[10px] text-sidebar-text">
-              Adana Pro trial
+              {trialDaysLeft} day{trialDaysLeft === 1 ? "" : "s"} left
             </p>
             <button
               onClick={() => setUpgradeOpen(true)}
@@ -617,7 +665,9 @@ export function Sidebar({ projects = [], teams = [], notificationCount = 0 }: Si
             </div>
             <div className="p-5">
               <p className="text-sm text-gray-700 dark:text-gray-300">
-                Upgrade to Adana Pro — <span className="font-semibold">$0/month</span> during demo. Contact support.
+                Upgrade to Adana Pro —{" "}
+                <span className="font-semibold">$0/month</span> during demo.
+                Contact support.
               </p>
             </div>
             <div className="flex justify-end border-t border-gray-100 px-5 py-3 dark:border-gray-700">
