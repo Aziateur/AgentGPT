@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CalendarView } from "@/components/calendar/calendar-view";
+import { useTaskDetailPanel } from "@/hooks/use-task-detail-panel";
 
 // ---------------------------------------------------------------------------
 // View Nav
@@ -47,12 +48,13 @@ function ViewNav({ projectId, active }: { projectId: string; active: string }) {
 export default function CalendarViewClient() {
   const searchParams = useSearchParams();
   const projectId = (searchParams?.get("id") as string) ?? "";
+  const { openTask } = useTaskDetailPanel();
 
   return (
     <div className="flex h-full flex-col">
       <ViewNav projectId={projectId} active="calendar" />
       <div className="flex-1 overflow-hidden">
-        <CalendarView projectId={projectId} />
+        <CalendarView projectId={projectId} onTaskClick={openTask} />
       </div>
     </div>
   );

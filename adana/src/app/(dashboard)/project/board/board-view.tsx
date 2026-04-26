@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAppStore } from "@/store/app-store";
+import { useTaskDetailPanel } from "@/hooks/use-task-detail-panel";
 import type { Task, Section } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -78,6 +79,8 @@ export default function ProjectBoardPage() {
 
   const sections = getProjectSections(projectId);
   const tasks = getProjectTasks(projectId);
+
+  const { openTask } = useTaskDetailPanel();
 
   const [addingTaskInSection, setAddingTaskInSection] = useState<string | null>(null);
   const [newTaskName, setNewTaskName] = useState("");
@@ -198,6 +201,12 @@ export default function ProjectBoardPage() {
                         key={task.id}
                         draggable
                         onDragStart={() => handleDragStart(task.id)}
+                        onClick={(e) => {
+                          // Only treat plain clicks as opens; HTML5 drag does
+                          // not fire `click`, so this is safe alongside DnD.
+                          e.stopPropagation();
+                          openTask(task.id);
+                        }}
                         className={`cursor-pointer rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition hover:shadow-md ${
                           task.completed ? "opacity-60" : ""
                         } ${draggedTaskId === task.id ? "opacity-40" : ""}`}
