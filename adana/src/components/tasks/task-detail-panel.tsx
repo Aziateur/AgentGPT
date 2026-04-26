@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   X,
   User,
@@ -8,33 +8,28 @@ import {
   Flag,
   FolderKanban,
   Tag,
-  Heart,
-  Bell,
-  MoreHorizontal,
-  Copy,
   Trash2,
-  ArrowRightLeft,
   Milestone,
   ThumbsUp,
   ThumbsDown,
-  MessageSquare,
   Link2,
   ChevronDown,
   ChevronRight,
   Plus,
-  Send,
   Paperclip,
   Download,
-  Play,
-  Square,
-  Clock,
-  Repeat,
   Lock,
 } from "lucide-react";
 import { SubtaskList } from "./subtask-list";
 import { useAppStore } from "@/store/app-store";
 import { supabase } from "@/lib/supabase";
 import type { Task, Comment as CommentType } from "@/types";
+import { DetailTopBar } from "./detail-top-bar";
+import { DetailDatePopover } from "./detail-date-popover";
+import { DetailCommentsTab } from "./detail-comments-tab";
+import { DetailActivityTab, type ActivityEntry } from "./detail-activity-tab";
+import type { RecurrenceValue } from "./detail-recurrence-popover";
+import { Modal } from "@/components/ui/modal";
 
 // -- Helpers ------------------------------------------------------------------
 
@@ -90,13 +85,22 @@ export function TaskDetailPanel({
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description || "");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [showDeps, setShowDeps] = useState(true);
+  const [showDepsBlocking, setShowDepsBlocking] = useState(true);
+  const [showDepsBlockedBy, setShowDepsBlockedBy] = useState(true);
   const [showCustomFields, setShowCustomFields] = useState(true);
-  const [showActions, setShowActions] = useState(false);
   const [liked, setLiked] = useState(false);
-  const [following, setFollowing] = useState(false);
+  const [, setFollowing] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [showDatePopover, setShowDatePopover] = useState(false);
+  const [activeTab, setActiveTab] = useState<"comments" | "activity">("comments");
+  const [sortAsc, setSortAsc] = useState(true);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  const [showMultiHomePicker, setShowMultiHomePicker] = useState(false);
+  const subtaskAddRef = useRef<HTMLInputElement | null>(null);
+  const tagInputRef = useRef<HTMLInputElement | null>(null);
 
   // -- Extended sections state --
   const [tagInput, setTagInput] = useState("");
@@ -160,6 +164,8 @@ export function TaskDetailPanel({
   const getTaskProjects = useAppStore((s) => s.getTaskProjects);
 
   const updateTaskStore = useAppStore((s) => s.updateTask);
+  const createTaskStore = useAppStore((s) => s.createTask);
+  const allSections = useAppStore((s) => s.sections);
 
   const projectTaskTypes = useAppStore((s) =>
     task.projectId ? s.getProjectTaskTypes(task.projectId) : []
@@ -319,11 +325,8 @@ export function TaskDetailPanel({
     );
   }, [allTasks, task.id, task.projectId, blockers, blockedTasks]);
 
-  const recurrence = ((task as any).recurrence || null) as
-    | { freq?: string; interval?: number }
-    | null;
-  const recurrenceFreq = recurrence?.freq ?? "none";
-  const recurrenceInterval = recurrence?.interval ?? 1;
+  const recurrence = ((task as any).recurrence || null) as RecurrenceValue | null;
+  const isPrivate = Boolean((task as any).isPrivate);
 
   // -- Handlers --
 
@@ -444,15 +447,81 @@ export function TaskDetailPanel({
     setManualMinutes("");
   }
 
-  async function handleRecurrenceChange(
-    freq: string,
-    interval: number = recurrenceInterval || 1
-  ) {
-    if (freq === "none") {
-      await updateTaskStore(task.id, { recurrence: null } as any);
-    } else {
-      await updateTaskStore(task.id, { recurrence: { freq, interval } } as any);
+  async function handleDatePatch(patch: {
+    startDate?: string | null;
+    dueDate?: string | null;
+    dueTime?: string | null;
+    recurrence?: RecurrenceValue | null;
+  }) {
+    const update: any = {};
+    if (patch.startDate !== undefined) update.startDate = patch.startDate;
+    if (patch.dueDate !== undefined) update.dueDate = patch.dueDate;
+    if (patch.dueTime !== undefined) update.dueTime = patch.dueTime;
+    if (patch.recurrence !== undefined) update.recurrence = patch.recurrence;
+    await updateTaskStore(task.id, update);
+    onUpdate?.(task.id, update);
+  }
+
+  function handleCopyTaskLink() {
+    if (typeof window === "undefined") return;
+    const url = `${window.location.origin}/project/${task.projectId}/list?task=${task.id}`;
+    try {
+      navigator.clipboard?.writeText(url);
+    } catch {
+      // ignore
     }
+  }
+
+  function handleOpenFullscreen() {
+    if (typeof window === "undefined") return;
+    window.open(`/task/${task.id}`, "_blank");
+  }
+
+  function handlePrint() {
+    if (typeof window !== "undefined") window.print();
+  }
+
+  function handleAddCollaborator() {
+    // Focus the projects multi-home picker as the closest collaborator action,
+    // since Bucket B does not modify follower membership.
+    setShowMultiHomePicker(true);
+  }
+
+  function handleFocusAddSubtask() {
+    setTimeout(() => subtaskAddRef.current?.focus(), 0);
+  }
+
+  function handleFocusAddTag() {
+    setTimeout(() => tagInputRef.current?.focus(), 0);
+  }
+
+  function handleUploadAttachment() {
+    fileInputRef.current?.click();
+  }
+
+  async function handleCreateFollowUp() {
+    await createTaskStore({
+      title: "Follow up: " + task.title,
+      projectId: task.projectId ?? null,
+    });
+  }
+
+  async function handleConvertTo(type: "task" | "milestone" | "approval") {
+    await updateTaskStore(task.id, { taskType: type });
+    onUpdate?.(task.id, { taskType: type });
+  }
+
+  async function handleTogglePrivate() {
+    await updateTaskStore(task.id, { isPrivate: !isPrivate } as any);
+  }
+
+  function toggleProjectExpanded(projectId: string) {
+    setExpandedProjects((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      return next;
+    });
   }
 
   async function handleAddToProject() {
@@ -484,93 +553,51 @@ export function TaskDetailPanel({
   return (
     <div className="flex h-full flex-col border-l border-gray-200 bg-white">
       {/* Top bar */}
-      <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-3">
-        {/* Completed indicator */}
-        <button
-          onClick={() => onToggleComplete?.(task.id)}
-          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition ${
-            task.completed
-              ? "border-green-500 bg-green-500 text-white"
-              : "border-gray-300 hover:border-gray-400"
-          }`}
-        >
-          {task.completed && (
-            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-            </svg>
+      <DetailTopBar
+        task={task}
+        followers={followers as Array<{ user?: any; userId?: string }>}
+        liked={liked}
+        isTimerRunning={!!openTimerEntry}
+        manualMinutes={manualMinutes}
+        isPrivate={isPrivate}
+        onToggleComplete={() => onToggleComplete?.(task.id)}
+        onToggleTimer={handleToggleTimer}
+        onSetManualMinutes={setManualMinutes}
+        onSubmitManualMinutes={handleAddManualTime}
+        onAddCollaborator={handleAddCollaborator}
+        onShare={() => setShareOpen(true)}
+        onLike={handleLike}
+        onCopyLink={handleCopyTaskLink}
+        onOpenFullscreen={handleOpenFullscreen}
+        onClose={() => onClose?.()}
+        onAddToAnotherProject={() => setShowMultiHomePicker(true)}
+        onFocusAddSubtask={handleFocusAddSubtask}
+        onFocusAddTag={handleFocusAddTag}
+        onUploadAttachment={handleUploadAttachment}
+        onCreateFollowUp={handleCreateFollowUp}
+        onMergeDuplicates={() => setMergeOpen(true)}
+        onConvertTo={handleConvertTo}
+        onDuplicate={handleDuplicate}
+        onPrint={handlePrint}
+        onTogglePrivate={handleTogglePrivate}
+        onDelete={handleDelete}
+      />
+
+      {/* Type indicator badges (kept for visual continuity) */}
+      {(isMilestone || isApproval) && (
+        <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-4 py-1.5">
+          {isMilestone && (
+            <span className="flex items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-600">
+              <Milestone className="h-3 w-3" /> Milestone
+            </span>
           )}
-        </button>
-
-        {/* Milestone / Approval indicator */}
-        {isMilestone && (
-          <span className="flex items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-600">
-            <Milestone className="h-3 w-3" /> Milestone
-          </span>
-        )}
-        {isApproval && (
-          <span className="flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
-            <ThumbsUp className="h-3 w-3" /> Approval
-          </span>
-        )}
-
-        <div className="flex-1" />
-
-        {/* Like */}
-        <button
-          onClick={handleLike}
-          className={`rounded p-1.5 transition ${liked ? "text-red-500" : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"}`}
-          title="Like"
-        >
-          <Heart className={`h-4 w-4 ${liked ? "fill-current" : ""}`} />
-        </button>
-
-        {/* Follow */}
-        <button
-          onClick={handleFollow}
-          className={`rounded p-1.5 transition ${following ? "text-indigo-500" : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"}`}
-          title={following ? "Unfollow" : "Follow"}
-        >
-          <Bell className={`h-4 w-4 ${following ? "fill-current" : ""}`} />
-        </button>
-
-        {/* Actions menu */}
-        <div className="relative">
-          <button
-            onClick={() => setShowActions(!showActions)}
-            className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
-          {showActions && (
-            <div className="absolute right-0 top-full z-10 mt-1 w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
-              <button
-                onClick={handleDuplicate}
-                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              >
-                <Copy className="h-3.5 w-3.5" /> Duplicate
-              </button>
-              <button className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                <ArrowRightLeft className="h-3.5 w-3.5" /> Move to...
-              </button>
-              <div className="my-1 border-t border-gray-100" />
-              <button
-                onClick={handleDelete}
-                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-              >
-                <Trash2 className="h-3.5 w-3.5" /> Delete
-              </button>
-            </div>
+          {isApproval && (
+            <span className="flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
+              <ThumbsUp className="h-3 w-3" /> Approval
+            </span>
           )}
         </div>
-
-        {/* Close */}
-        <button
-          onClick={onClose}
-          className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
+      )}
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-auto">
@@ -635,19 +662,44 @@ export function TaskDetailPanel({
                   <span className="text-sm text-gray-900">{assignee.name}</span>
                 </div>
               ) : (
-                <span className="text-sm text-gray-400">Unassigned</span>
+                <span className="text-sm text-gray-400">No assignee</span>
               )}
             </div>
 
-            {/* Due date */}
+            {/* Due date with popover */}
             <div className="flex items-center gap-3">
               <Calendar className="h-4 w-4 text-gray-400" />
               <span className="w-20 text-xs text-gray-500">Due date</span>
-              <span className="text-sm text-gray-900">
-                {task.dueDate
-                  ? new Date(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                  : "No due date"}
-              </span>
+              <div className="relative">
+                <button
+                  onClick={() => setShowDatePopover((v) => !v)}
+                  className="rounded border border-transparent px-2 py-0.5 text-sm text-gray-900 hover:border-gray-200 hover:bg-gray-50"
+                >
+                  {task.dueDate
+                    ? new Date(task.dueDate).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })
+                    : <span className="text-gray-400">No due date</span>}
+                  {task.dueTime ? ` · ${task.dueTime}` : ""}
+                </button>
+                {showDatePopover && (
+                  <DetailDatePopover
+                    startDate={task.startDate || null}
+                    dueDate={task.dueDate || null}
+                    dueTime={task.dueTime || null}
+                    recurrence={recurrence}
+                    onClose={() => setShowDatePopover(false)}
+                    onChange={handleDatePatch}
+                  />
+                )}
+              </div>
+              {recurrence && (
+                <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-600">
+                  Repeats {recurrence.freq}
+                </span>
+              )}
             </div>
 
             {/* Priority */}
@@ -728,7 +780,7 @@ export function TaskDetailPanel({
           </div>
 
           {/* Subtasks */}
-          <div className="mb-6">
+          <div className="mb-6" ref={(el) => { subtaskAddRef.current = el ? (el.querySelector("input") as HTMLInputElement | null) : null; }}>
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
               Subtasks
             </h3>
@@ -771,6 +823,7 @@ export function TaskDetailPanel({
             </div>
             <div className="relative mt-2">
               <input
+                ref={tagInputRef}
                 type="text"
                 value={tagInput}
                 onChange={(e) => {
@@ -826,7 +879,7 @@ export function TaskDetailPanel({
             {showCustomFields && (
               <div className="space-y-2">
                 {projectCustomFields.length === 0 && (
-                  <p className="text-xs text-gray-400">No custom fields defined for this project</p>
+                  <p className="text-xs text-gray-400">No custom fields in this project</p>
                 )}
                 {projectCustomFields.map((def) => {
                   const val = customValueByField.get(def.id);
@@ -1068,342 +1121,346 @@ export function TaskDetailPanel({
             </div>
           </div>
 
-          {/* Dependencies (enhanced) */}
-          <div className="mb-6">
-            <button
-              onClick={() => setShowDeps(!showDeps)}
-              className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-gray-500"
-            >
-              {showDeps ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-              Dependencies
-            </button>
-            {showDeps && (
-              <div className="space-y-3">
-                {/* Blocked by */}
-                <div>
-                  <div className="mb-1 text-[11px] font-medium text-gray-500">Blocked by</div>
-                  <div className="space-y-1.5">
-                    {blockers.length === 0 && (
-                      <p className="text-xs text-gray-400">No blockers</p>
-                    )}
-                    {blockers.map((b) => (
-                      <div
-                        key={b.id}
-                        className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2"
-                      >
-                        <Link2 className="h-3.5 w-3.5 text-gray-400" />
-                        <span
-                          className={`flex-1 text-sm ${
-                            b.completed ? "text-gray-400 line-through" : "text-gray-900"
-                          }`}
-                        >
-                          {b.title}
-                        </span>
-                        <button
-                          onClick={() => handleRemoveBlocker(b.id)}
-                          className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
-                          aria-label="Remove blocker"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
-                    <div className="flex gap-2">
-                      <select
-                        value={addBlockerTaskId}
-                        onChange={(e) => setAddBlockerTaskId(e.target.value)}
-                        className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                      >
-                        <option value="">+ Add blocker...</option>
-                        {projectTasksForDeps.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.title}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={handleAddBlocker}
-                        disabled={!addBlockerTaskId}
-                        className="rounded-lg bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
-                      >
-                        Add
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Blocking */}
-                <div>
-                  <div className="mb-1 text-[11px] font-medium text-gray-500">Blocking</div>
-                  <div className="space-y-1.5">
-                    {blockedTasks.length === 0 && (
-                      <p className="text-xs text-gray-400">Not blocking anything</p>
-                    )}
-                    {blockedTasks.map((b) => (
-                      <div
-                        key={b.id}
-                        className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2"
-                      >
-                        <Link2 className="h-3.5 w-3.5 text-gray-400" />
-                        <span
-                          className={`flex-1 text-sm ${
-                            b.completed ? "text-gray-400 line-through" : "text-gray-900"
-                          }`}
-                        >
-                          {b.title}
-                        </span>
-                        <button
-                          onClick={() => handleRemoveBlocked(b.id)}
-                          className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
-                          aria-label="Remove dependency"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
-                    <div className="flex gap-2">
-                      <select
-                        value={addBlockedTaskId}
-                        onChange={(e) => setAddBlockedTaskId(e.target.value)}
-                        className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                      >
-                        <option value="">+ Add blocked task...</option>
-                        {projectTasksForDeps.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.title}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={handleAddBlocked}
-                        disabled={!addBlockedTaskId}
-                        className="rounded-lg bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
-                      >
-                        Add
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Time Tracking */}
-          <div className="mb-6">
-            <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
-              <Clock className="h-3.5 w-3.5" /> Time Tracking
-            </h3>
-            <div className="space-y-2">
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-gray-900">
-                  Total: <span className="font-medium">{formatMinutes(actualMinutes)}</span>
-                </span>
-                {openTimerEntry && (
-                  <span className="rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-medium text-green-600">
-                    Timer running
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={handleToggleTimer}
-                  className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white ${
-                    openTimerEntry ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"
-                  }`}
-                >
-                  {openTimerEntry ? (
-                    <>
-                      <Square className="h-3 w-3" /> Stop
-                    </>
-                  ) : (
-                    <>
-                      <Play className="h-3 w-3" /> Start timer
-                    </>
-                  )}
-                </button>
-                <div className="flex items-center gap-1">
-                  <input
-                    type="number"
-                    min={1}
-                    value={manualMinutes}
-                    onChange={(e) =>
-                      setManualMinutes(e.target.value === "" ? "" : Number(e.target.value))
-                    }
-                    placeholder="Minutes"
-                    className="w-20 rounded-lg border border-gray-200 px-2 py-1 text-xs focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                  />
-                  <button
-                    onClick={handleAddManualTime}
-                    disabled={!manualMinutes || manualMinutes <= 0}
-                    className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Recurrence */}
-          <div className="mb-6">
-            <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
-              <Repeat className="h-3.5 w-3.5" /> Recurrence
-            </h3>
-            <div className="flex items-center gap-2">
-              <select
-                value={recurrenceFreq}
-                onChange={(e) => handleRecurrenceChange(e.target.value, recurrenceInterval)}
-                className="rounded-lg border border-gray-200 px-2 py-1 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+          {/* Dependencies — separate collapsible badges */}
+          <div className="mb-6 space-y-3">
+            {/* Blocked by */}
+            <div>
+              <button
+                onClick={() => setShowDepsBlockedBy((v) => !v)}
+                className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500"
               >
-                <option value="none">None</option>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-              </select>
-              {recurrenceFreq !== "none" && (
-                <>
-                  <span className="text-xs text-gray-500">every</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={recurrenceInterval}
-                    onChange={(e) =>
-                      handleRecurrenceChange(recurrenceFreq, Math.max(1, Number(e.target.value) || 1))
-                    }
-                    className="w-16 rounded-lg border border-gray-200 px-2 py-1 text-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                  />
-                  <span className="text-xs text-gray-500">
-                    {recurrenceFreq === "daily"
-                      ? "day(s)"
-                      : recurrenceFreq === "weekly"
-                      ? "week(s)"
-                      : "month(s)"}
-                  </span>
-                </>
+                {showDepsBlockedBy ? (
+                  <ChevronDown className="h-3 w-3" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" />
+                )}
+                Blocked by
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+                  {blockers.length}
+                </span>
+              </button>
+              {showDepsBlockedBy && (
+                <div className="space-y-1.5">
+                  {blockers.length === 0 && (
+                    <p className="text-xs text-gray-400">No blockers</p>
+                  )}
+                  {blockers.map((b) => (
+                    <div
+                      key={b.id}
+                      className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2"
+                    >
+                      <Link2 className="h-3.5 w-3.5 text-gray-400" />
+                      <span
+                        className={`flex-1 text-sm ${
+                          b.completed ? "text-gray-400 line-through" : "text-gray-900"
+                        }`}
+                      >
+                        {b.title}
+                      </span>
+                      <button
+                        onClick={() => handleRemoveBlocker(b.id)}
+                        className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                        aria-label="Remove blocker"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex gap-2">
+                    <select
+                      value={addBlockerTaskId}
+                      onChange={(e) => setAddBlockerTaskId(e.target.value)}
+                      className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    >
+                      <option value="">+ Add blocker...</option>
+                      {projectTasksForDeps.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.title}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={handleAddBlocker}
+                      disabled={!addBlockerTaskId}
+                      className="rounded-lg bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Blocking */}
+            <div>
+              <button
+                onClick={() => setShowDepsBlocking((v) => !v)}
+                className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500"
+              >
+                {showDepsBlocking ? (
+                  <ChevronDown className="h-3 w-3" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" />
+                )}
+                Blocking
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+                  {blockedTasks.length}
+                </span>
+              </button>
+              {showDepsBlocking && (
+                <div className="space-y-1.5">
+                  {blockedTasks.length === 0 && (
+                    <p className="text-xs text-gray-400">Not blocking anything</p>
+                  )}
+                  {blockedTasks.map((b) => (
+                    <div
+                      key={b.id}
+                      className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2"
+                    >
+                      <Link2 className="h-3.5 w-3.5 text-gray-400" />
+                      <span
+                        className={`flex-1 text-sm ${
+                          b.completed ? "text-gray-400 line-through" : "text-gray-900"
+                        }`}
+                      >
+                        {b.title}
+                      </span>
+                      <button
+                        onClick={() => handleRemoveBlocked(b.id)}
+                        className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                        aria-label="Remove dependency"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex gap-2">
+                    <select
+                      value={addBlockedTaskId}
+                      onChange={(e) => setAddBlockedTaskId(e.target.value)}
+                      className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    >
+                      <option value="">+ Add blocked task...</option>
+                      {projectTasksForDeps.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.title}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={handleAddBlocked}
+                      disabled={!addBlockedTaskId}
+                      className="rounded-lg bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>
 
+          {/* Time Tracking summary (controls live in the top bar) */}
+          {(actualMinutes > 0 || openTimerEntry) && (
+            <div className="mb-6 text-xs text-gray-500">
+              Time tracked:{" "}
+              <span className="font-medium text-gray-900">{formatMinutes(actualMinutes)}</span>
+              {openTimerEntry && (
+                <span className="ml-2 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-medium text-green-600">
+                  Timer running
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Projects (Multi-homing) */}
           <div className="mb-6">
-            <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
-              <FolderKanban className="h-3.5 w-3.5" /> Projects
-            </h3>
+            <button
+              onClick={() => setShowMultiHomePicker((v) => !v)}
+              className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500"
+            >
+              <FolderKanban className="h-3.5 w-3.5" />
+              Projects {multiHomedProjects.length}
+              <span className="ml-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                +
+              </span>
+            </button>
             <div className="space-y-1.5">
               {multiHomedProjects.length === 0 && (
                 <p className="text-xs text-gray-400">Not in any project</p>
               )}
               {multiHomedProjects.map((p) => {
                 const isPrimary = p.id === task.projectId;
+                const sectionName = isPrimary
+                  ? allSections.find((s) => s.id === task.sectionId)?.name || "(no section)"
+                  : "(no section)";
+                const expanded = expandedProjects.has(p.id);
                 return (
-                  <div
-                    key={p.id}
-                    className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-1.5"
-                  >
-                    <span
-                      className="h-2 w-2 rounded-full"
-                      style={{ backgroundColor: p.color || "#6366f1" }}
-                    />
-                    <span className="flex-1 text-sm text-gray-900">{p.name}</span>
-                    {isPrimary && (
-                      <span className="text-[10px] font-medium text-gray-400">primary</span>
-                    )}
-                    {!isPrimary && (
+                  <div key={p.id} className="rounded-lg border border-gray-100">
+                    <div className="flex items-center gap-2 px-3 py-1.5">
                       <button
-                        onClick={() => handleRemoveFromProject(p.id)}
-                        className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
-                        aria-label="Remove from project"
+                        onClick={() => toggleProjectExpanded(p.id)}
+                        className="rounded p-0.5 text-gray-400 hover:bg-gray-100"
+                        aria-label="Toggle project group"
                       >
-                        <X className="h-3 w-3" />
+                        {expanded ? (
+                          <ChevronDown className="h-3 w-3" />
+                        ) : (
+                          <ChevronRight className="h-3 w-3" />
+                        )}
                       </button>
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ backgroundColor: p.color || "#6366f1" }}
+                      />
+                      <span className="flex-1 truncate text-sm text-gray-900">
+                        {p.name}
+                        <span className="ml-1 text-gray-400"> — {sectionName}</span>
+                      </span>
+                      {isPrimary && (
+                        <span className="text-[10px] font-medium text-gray-400">primary</span>
+                      )}
+                      {!isPrimary && (
+                        <button
+                          onClick={() => handleRemoveFromProject(p.id)}
+                          className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                          aria-label="Remove from project"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                    {expanded && (
+                      <div className="border-t border-gray-100 bg-gray-50 px-8 py-1.5 text-[11px] text-gray-500">
+                        Section: {sectionName}
+                      </div>
                     )}
                   </div>
                 );
               })}
-              <div className="flex gap-2">
-                <select
-                  value={addProjectId}
-                  onChange={(e) => setAddProjectId(e.target.value)}
-                  className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                >
-                  <option value="">+ Add to project...</option>
-                  {allProjects
-                    .filter((p) => !multiHomedProjects.some((mp) => mp.id === p.id))
-                    .map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                </select>
-                <button
-                  onClick={handleAddToProject}
-                  disabled={!addProjectId}
-                  className="rounded-lg bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
-                >
-                  Add
-                </button>
-              </div>
+              {showMultiHomePicker && (
+                <div className="flex gap-2">
+                  <select
+                    value={addProjectId}
+                    onChange={(e) => setAddProjectId(e.target.value)}
+                    className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  >
+                    <option value="">+ Add to project...</option>
+                    {allProjects
+                      .filter((p) => !multiHomedProjects.some((mp) => mp.id === p.id))
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    onClick={handleAddToProject}
+                    disabled={!addProjectId}
+                    className="rounded-lg bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
+                  >
+                    Add
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Comments */}
+          {/* Comments / All activity tabs */}
           <div>
-            <h3 className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
-              <MessageSquare className="h-3.5 w-3.5" />
-              Comments ({comments.length})
-            </h3>
-            <div className="space-y-3">
-              {comments.map((comment) => {
-                const author = comment.author;
-                const initial = author?.name?.[0]?.toUpperCase() || "?";
-                return (
-                  <div key={comment.id} className="flex gap-2">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-medium text-indigo-600">
-                      {initial}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-gray-900">{author?.name || "Unknown"}</span>
-                        <span className="text-[10px] text-gray-400">{timeAgo(comment.createdAt)}</span>
-                      </div>
-                      <p className="mt-0.5 text-sm text-gray-700">{comment.text}</p>
-                      {comment.likes && (comment.likes as unknown[]).length > 0 && (
-                        <span className="mt-1 inline-flex items-center gap-0.5 text-[10px] text-gray-400">
-                          <Heart className="h-2.5 w-2.5" /> {(comment.likes as unknown[]).length}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Add comment */}
-            <div className="mt-4 flex gap-2">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-medium text-indigo-600">
-                U
-              </div>
-              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-gray-200 px-3 py-2">
-                <input
-                  type="text"
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleAddComment(); }}
-                  placeholder="Write a comment..."
-                  className="min-w-0 flex-1 bg-transparent text-sm text-gray-900 placeholder:text-gray-400 outline-none"
-                />
+            <div className="mb-3 flex items-center justify-between border-b border-gray-100">
+              <div className="flex items-center gap-4">
                 <button
-                  onClick={handleAddComment}
-                  disabled={!newComment.trim() || isSubmittingComment}
-                  className="rounded p-1 text-indigo-600 hover:bg-indigo-50 disabled:opacity-30"
+                  onClick={() => setActiveTab("comments")}
+                  className={`-mb-px border-b-2 px-1 py-2 text-xs font-medium transition ${
+                    activeTab === "comments"
+                      ? "border-indigo-600 text-indigo-700"
+                      : "border-transparent text-gray-500 hover:text-gray-700"
+                  }`}
                 >
-                  <Send className="h-3.5 w-3.5" />
+                  Comments
+                  {comments.length > 0 && (
+                    <span className="ml-1 text-gray-400">({comments.length})</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setActiveTab("activity")}
+                  className={`-mb-px border-b-2 px-1 py-2 text-xs font-medium transition ${
+                    activeTab === "activity"
+                      ? "border-indigo-600 text-indigo-700"
+                      : "border-transparent text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  All activity
                 </button>
               </div>
+              <button
+                onClick={() => setSortAsc((v) => !v)}
+                className="rounded px-2 py-1 text-[11px] text-gray-500 hover:bg-gray-100"
+                title="Toggle sort order"
+              >
+                Oldest {sortAsc ? "↑" : "↓"}
+              </button>
             </div>
+
+            {activeTab === "comments" ? (
+              <DetailCommentsTab
+                comments={comments}
+                sortAsc={sortAsc}
+                newComment={newComment}
+                isSubmitting={isSubmittingComment}
+                onChangeComment={setNewComment}
+                onSubmitComment={handleAddComment}
+              />
+            ) : (
+              <DetailActivityTab
+                activity={(((task as any).activity as ActivityEntry[]) || [])}
+                sortAsc={sortAsc}
+              />
+            )}
           </div>
         </div>
       </div>
+
+      {/* Share dialog (stub) */}
+      <Modal
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        title="Share task"
+        description="Sharing coming soon"
+      >
+        <div className="text-sm text-gray-600">
+          Sharing options will be available in a future release.
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={() => setShareOpen(false)}
+            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+          >
+            Close
+          </button>
+        </div>
+      </Modal>
+
+      {/* Merge duplicates (stub) */}
+      <Modal
+        open={mergeOpen}
+        onClose={() => setMergeOpen(false)}
+        title="Merge duplicate tasks"
+        description="Coming soon"
+      >
+        <div className="text-sm text-gray-600">
+          Merging duplicate tasks will be available in a future release.
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={() => setMergeOpen(false)}
+            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+          >
+            Close
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }
