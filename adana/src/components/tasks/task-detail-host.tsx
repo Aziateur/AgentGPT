@@ -24,6 +24,9 @@ function TaskDetailHostInner() {
   const deleteTask = useAppStore((s) => s.deleteTask);
   const createTask = useAppStore((s) => s.createTask);
   const toggleTaskComplete = useAppStore((s) => s.toggleTaskComplete);
+  const createComment = useAppStore((s) => s.createComment);
+  const toggleTaskLike = useAppStore((s) => s.toggleTaskLike);
+  const toggleTaskFollower = useAppStore((s) => s.toggleTaskFollower);
 
   // ESC closes the drawer.
   useEffect(() => {
@@ -85,10 +88,16 @@ function TaskDetailHostInner() {
     await updateTask(taskId, { approvalStatus: status as Task["approvalStatus"] });
   }
 
-  // Bucket D will wire these to real store mutations.
-  async function handleAddComment(_taskId: string, _text: string) {}
-  async function handleToggleLike(_taskId: string) {}
-  async function handleToggleFollow(_taskId: string) {}
+  async function handleAddComment(taskId: string, text: string) {
+    if (!text.trim()) return;
+    await createComment(taskId, text.trim());
+  }
+  async function handleToggleLike(taskId: string) {
+    await toggleTaskLike(taskId);
+  }
+  async function handleToggleFollow(taskId: string) {
+    await toggleTaskFollower(taskId);
+  }
 
   // Build enriched task with assignee for the panel UI.
   const enrichedTask = task

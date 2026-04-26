@@ -18,6 +18,7 @@ import {
   createRecurrenceSlice,
 } from "./slices/views-misc";
 import { createTaskTypesSlice } from "./slices/task-types";
+import { createCommentsLikesSlice, type CommentsLikesState } from "./slices/comments-likes";
 import type {
   User,
   Project,
@@ -658,6 +659,24 @@ interface AppState {
   ) => Promise<import("@/types").TaskTypeDef>;
   deleteTaskType: (id: string) => Promise<void>;
   getProjectTaskTypes: (projectId: string) => import("@/types").TaskTypeDef[];
+
+  // -- Comments / Likes / Followers (Bucket D) --
+  comments: CommentsLikesState["comments"];
+  commentLikes: CommentsLikesState["commentLikes"];
+  taskLikes: CommentsLikesState["taskLikes"];
+  taskFollowers: CommentsLikesState["taskFollowers"];
+  fetchCommentsAndLikes: CommentsLikesState["fetchCommentsAndLikes"];
+  createComment: CommentsLikesState["createComment"];
+  updateComment: CommentsLikesState["updateComment"];
+  deleteComment: CommentsLikesState["deleteComment"];
+  toggleCommentLike: CommentsLikesState["toggleCommentLike"];
+  toggleTaskLike: CommentsLikesState["toggleTaskLike"];
+  toggleTaskFollower: CommentsLikesState["toggleTaskFollower"];
+  getTaskComments: CommentsLikesState["getTaskComments"];
+  isTaskLikedByMe: CommentsLikesState["isTaskLikedByMe"];
+  isTaskFollowedByMe: CommentsLikesState["isTaskFollowedByMe"];
+  getTaskFollowers: CommentsLikesState["getTaskFollowers"];
+  getTaskLikes: CommentsLikesState["getTaskLikes"];
 }
 
 // ---------------------------------------------------------------------------
@@ -838,6 +857,11 @@ export const useAppStore = create<AppState>()(
         initialized: true,
         loading: false,
         error: null,
+      });
+
+      // Fire-and-forget: load comments / likes / followers
+      get().fetchCommentsAndLikes().catch((err) => {
+        console.warn("fetchCommentsAndLikes failed", err);
       });
     } catch (err) {
       console.error("Supabase fetch failed:", err);
@@ -1264,6 +1288,7 @@ export const useAppStore = create<AppState>()(
   ...(createMultiHomingSlice(set, get) as unknown as Partial<AppState>),
   ...(createRecurrenceSlice(set, get) as unknown as Partial<AppState>),
   ...(createTaskTypesSlice(set, get) as unknown as Partial<AppState>),
+  ...(createCommentsLikesSlice(set, get) as unknown as Partial<AppState>),
 } as AppState),
 {
   name: "adana-app-storage",
