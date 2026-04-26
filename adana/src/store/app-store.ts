@@ -105,6 +105,7 @@ function sectionToDb(s: Partial<Section>) {
 }
 
 function dbToTask(r: Record<string, unknown>): Task {
+  const recurrenceRaw = r.recurrence as { freq?: string; interval?: number } | null | undefined;
   return {
     id: r.id as string,
     title: r.title as string,
@@ -124,7 +125,17 @@ function dbToTask(r: Record<string, unknown>): Task {
     projectId: (r.project_id as string) ?? null,
     sectionId: (r.section_id as string) ?? null,
     parentId: (r.parent_id as string) ?? null,
-  };
+    recurrence: recurrenceRaw ?? null,
+    subtasks: [],
+    comments: [],
+    tags: [],
+    attachments: [],
+    blockedBy: [],
+    blocking: [],
+    customValues: [],
+    likes: [],
+    followers: [],
+  } as Task;
 }
 
 function taskToDb(t: Partial<Task>) {
