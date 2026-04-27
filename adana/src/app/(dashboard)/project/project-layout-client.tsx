@@ -31,6 +31,12 @@ import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { duplicateProject } from "@/lib/duplicate-project";
+import { StatusPill } from "@/components/projects/status-pill";
+import { StatusUpdateEditor } from "@/components/projects/status-update-editor";
+import { ColorIconPicker } from "@/components/projects/color-icon-picker";
+import { MembersRow } from "@/components/projects/members-row";
+import { ShareDialog } from "@/components/projects/share-dialog";
+import { AddTabDialog } from "@/components/projects/add-tab-dialog";
 
 const COLOR_SWATCHES = [
   "#4f46e5",
@@ -93,6 +99,10 @@ export default function ProjectLayoutClient({
   const [editOpen, setEditOpen] = useState(false);
   const [colorIconOpen, setColorIconOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [statusEditorOpen, setStatusEditorOpen] = useState(false);
+  const [statusEditorStatus, setStatusEditorStatus] = useState<string | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [addTabOpen, setAddTabOpen] = useState(false);
 
   // Toast
   const [toast, setToast] = useState<string | null>(null);
@@ -472,6 +482,36 @@ export default function ProjectLayoutClient({
               </DropdownItem>
             </DropdownContent>
           </DropdownMenu>
+
+          <StatusPill
+            status={(project.status as string) ?? "on_track"}
+            onSelect={(s) => {
+              setStatusEditorStatus(s);
+              setStatusEditorOpen(true);
+            }}
+          />
+
+          <div className="ml-auto flex items-center gap-2">
+            <MembersRow projectId={project.id} />
+            <button
+              type="button"
+              onClick={() => setShareOpen(true)}
+              className="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Share
+            </button>
+          </div>
+        </div>
+
+        {/* Tabs row */}
+        <div className="mt-2 flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setAddTabOpen(true)}
+            className="rounded px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+          >
+            + Add tab
+          </button>
         </div>
       </div>
 
@@ -659,6 +699,29 @@ export default function ProjectLayoutClient({
           </Button>
         </div>
       </Modal>
+
+      {statusEditorOpen && (
+        <StatusUpdateEditor
+          open={statusEditorOpen}
+          project={project}
+          initialStatus={(statusEditorStatus ?? "on_track") as any}
+          onClose={() => setStatusEditorOpen(false)}
+        />
+      )}
+      {shareOpen && (
+        <ShareDialog
+          open={shareOpen}
+          projectId={project.id}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
+      {addTabOpen && (
+        <AddTabDialog
+          open={addTabOpen}
+          projectId={project.id}
+          onClose={() => setAddTabOpen(false)}
+        />
+      )}
     </div>
   );
 }
