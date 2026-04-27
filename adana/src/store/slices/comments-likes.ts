@@ -100,6 +100,14 @@ export const createCommentsLikesSlice: StateCreator<
       console.warn("createComment supabase failed", err);
     }
 
+    // Activity log
+    const log = (get() as any).logActivity as
+      | undefined
+      | ((e: { taskId: string; projectId: string | null; type: string; payload: unknown }) => Promise<void>);
+    if (log) {
+      log({ taskId, projectId: null, type: "commented", payload: { commentId: id, preview: text.slice(0, 80) } }).catch(() => {});
+    }
+
     // Auto-follow on comment
     const alreadyFollowing = get().taskFollowers.some((f) => f.taskId === taskId && f.userId === me);
     if (!alreadyFollowing) {

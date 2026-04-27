@@ -19,6 +19,7 @@ import {
 } from "./slices/views-misc";
 import { createTaskTypesSlice } from "./slices/task-types";
 import { createCommentsLikesSlice, type CommentsLikesState } from "./slices/comments-likes";
+import { createActivitySlice, type ActivityState } from "./slices/activity";
 import type {
   User,
   Project,
@@ -677,6 +678,13 @@ interface AppState {
   isTaskFollowedByMe: CommentsLikesState["isTaskFollowedByMe"];
   getTaskFollowers: CommentsLikesState["getTaskFollowers"];
   getTaskLikes: CommentsLikesState["getTaskLikes"];
+
+  // -- Activity log (Bucket I) --
+  activityEvents: ActivityState["activityEvents"];
+  fetchActivity: ActivityState["fetchActivity"];
+  logActivity: ActivityState["logActivity"];
+  getTaskActivity: ActivityState["getTaskActivity"];
+  getProjectActivity: ActivityState["getProjectActivity"];
 }
 
 // ---------------------------------------------------------------------------
@@ -863,6 +871,9 @@ export const useAppStore = create<AppState>()(
       get().fetchCommentsAndLikes().catch((err) => {
         console.warn("fetchCommentsAndLikes failed", err);
       });
+      get().fetchActivity().catch((err) => {
+        console.warn("fetchActivity failed", err);
+      });
     } catch (err) {
       console.error("Supabase fetch failed:", err);
       // No mock fallback - show empty state with error
@@ -1032,10 +1043,18 @@ export const useAppStore = create<AppState>()(
       console.error("Failed to create task in Supabase:", err);
     }
 
+    get().logActivity({
+      taskId: id,
+      projectId: task.projectId,
+      type: "created",
+      payload: { title: task.title },
+    }).catch(() => {});
+
     return task;
   },
 
   updateTask: async (id, updates) => {
+    const prev = get().tasks.find((t) => t.id === id);
     set((s) => ({
       tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...updates } : t)),
     }));
@@ -1044,11 +1063,33 @@ export const useAppStore = create<AppState>()(
     } catch (err) {
       console.error("Failed to update task in Supabase:", err);
     }
+    if (prev) {
+      const projId = prev.projectId ?? null;
+      if (updates.assigneeId !== undefined && updates.assigneeId !== prev.assigneeId) {
+        get().logActivity({ taskId: id, projectId: projId, type: "assigned", payload: { from: prev.assigneeId, to: updates.assigneeId } }).catch(() => {});
+      }
+      if (updates.dueDate !== undefined && updates.dueDate !== prev.dueDate) {
+        get().logActivity({ taskId: id, projectId: projId, type: "due_date_set", payload: { dueDate: updates.dueDate } }).catch(() => {});
+      }
+      if (updates.startDate !== undefined && updates.startDate !== prev.startDate) {
+        get().logActivity({ taskId: id, projectId: projId, type: "start_date_set", payload: { startDate: updates.startDate } }).catch(() => {});
+      }
+      if (updates.priority !== undefined && updates.priority !== prev.priority) {
+        get().logActivity({ taskId: id, projectId: projId, type: "priority_set", payload: { priority: updates.priority } }).catch(() => {});
+      }
+      if (updates.taskType !== undefined && updates.taskType !== prev.taskType) {
+        get().logActivity({ taskId: id, projectId: projId, type: "type_converted", payload: { taskType: updates.taskType } }).catch(() => {});
+      }
+      if (updates.approvalStatus !== undefined && updates.approvalStatus !== prev.approvalStatus) {
+        get().logActivity({ taskId: id, projectId: projId, type: "status_changed", payload: { approvalStatus: updates.approvalStatus } }).catch(() => {});
+      }
+    }
   },
 
   // Soft-delete: mark task as trashed.
   deleteTask: async (id) => {
     const now = new Date().toISOString();
+    const t = get().tasks.find((x) => x.id === id);
     set((s) => ({
       tasks: s.tasks.map((t) =>
         t.id === id ? { ...t, deletedAt: now } : t
@@ -1058,6 +1099,9 @@ export const useAppStore = create<AppState>()(
       await supabase.from("tasks").update({ deleted_at: now }).eq("id", id);
     } catch (err) {
       console.error("Failed to soft-delete task in Supabase:", err);
+    }
+    if (t) {
+      get().logActivity({ taskId: id, projectId: t.projectId ?? null, type: "deleted", payload: { title: t.title } }).catch(() => {});
     }
   },
 
@@ -1108,6 +1152,12 @@ export const useAppStore = create<AppState>()(
     } catch (err) {
       console.error("Failed to toggle task complete in Supabase:", err);
     }
+    get().logActivity({
+      taskId: id,
+      projectId: task.projectId ?? null,
+      type: completed ? "completed" : "uncompleted",
+      payload: { title: task.title },
+    }).catch(() => {});
   },
 
   // -- Section mutations ----------------------------------------------------
@@ -1289,6 +1339,7 @@ export const useAppStore = create<AppState>()(
   ...(createRecurrenceSlice(set, get) as unknown as Partial<AppState>),
   ...(createTaskTypesSlice(set, get) as unknown as Partial<AppState>),
   ...(createCommentsLikesSlice(set, get) as unknown as Partial<AppState>),
+  ...(createActivitySlice(set, get) as unknown as Partial<AppState>),
 } as AppState),
 {
   name: "adana-app-storage",
