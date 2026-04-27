@@ -54,3 +54,6 @@ yarn-error.log*
 schema.prismae
 *.sql
 !adana/supabase/migrations/*.sql
+
+# Claude Code agent worktrees (runtime infra, not source)
+/.claude/
