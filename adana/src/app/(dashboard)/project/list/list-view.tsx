@@ -1,12 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, MoreHorizontal, ChevronDown } from "lucide-react";
 import { useAppStore } from "@/store/app-store";
 import { TaskDetailPanel } from "@/components/tasks/task-detail-panel";
 import { CreateTaskModal } from "@/components/tasks/create-task-modal";
+import { ListToolbar } from "@/components/tasks/list-toolbar";
+import {
+  FilterDropdown,
+  type AdvancedFilter,
+  type QuickFilterKey as ToolbarQuickFilterKey,
+} from "@/components/tasks/list-filter-dropdown";
+import { SortDropdown, type SortField } from "@/components/tasks/list-sort-dropdown";
+import { GroupDropdown, type GroupSpec, type GroupField } from "@/components/tasks/list-group-dropdown";
+import { SectionMenu } from "@/components/tasks/list-section-menu";
+import { TaskContextMenu } from "@/components/tasks/list-task-context-menu";
+import { BulkActionBar } from "@/components/tasks/list-bulk-action-bar";
+import { InlineAddTaskRow } from "@/components/tasks/list-inline-add-task-row";
 import type { Task, Section, FilterSpec, SortSpec } from "@/types";
 
 // -- Quick filter chips -------------------------------------------------------
@@ -169,6 +181,14 @@ export default function ProjectListPage() {
   const [appliedFilters, setAppliedFilters] = useState<FilterSpec[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [appliedSort, setAppliedSort] = useState<SortSpec[]>([]);
+  const [activeMenu, setActiveMenu] = useState<"filter" | "sort" | "group" | "options" | null>(null);
+  const [advFilters, setAdvFilters] = useState<AdvancedFilter[]>([]);
+  const [sortField, setSortField] = useState<SortField>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [groups, setGroups] = useState<GroupSpec[]>([]);
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [openSectionMenu, setOpenSectionMenu] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ taskId: string; x: number; y: number } | null>(null);
 
   // Listen for global create-task event (header + keyboard shortcut)
   useEffect(() => {
@@ -365,26 +385,60 @@ export default function ProjectListPage() {
         {/* Main list */}
         <div className="flex-1 overflow-auto">
           <div className="p-4">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold text-gray-900">Tasks</h2>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={viewSearch}
-                  onChange={(e) => setViewSearch(e.target.value)}
-                  placeholder="Search this view..."
-                  className="w-48 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 outline-none focus:border-indigo-400"
+            <div className="mb-3">
+              <div className="relative flex items-center justify-between gap-2">
+                <h2 className="text-lg font-semibold text-gray-900">Tasks</h2>
+                <ListToolbar
+                  searchValue={viewSearch}
+                  onSearchChange={setViewSearch}
+                  onAddTask={() => { setCreateSectionId(null); setShowCreateModal(true); }}
+                  onAddFromTemplate={() => { setCreateSectionId(null); setShowCreateModal(true); }}
+                  onConvertFromExisting={() => {}}
+                  onToggle={(m) => setActiveMenu(activeMenu === m ? null : m)}
+                  active={activeMenu}
+                  filterCount={quickFilters.size + advFilters.length}
+                  sortLabel={sortField}
+                  groupLabel={groups[0]?.field ?? null}
                 />
-                <button
-                  onClick={() => {
-                    setCreateSectionId(null);
-                    setShowCreateModal(true);
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add task
-                </button>
+                {activeMenu === "filter" && (
+                  <div className="absolute right-0 top-full z-30">
+                    <FilterDropdown
+                      active={quickFilters as Set<ToolbarQuickFilterKey>}
+                      onToggle={(k) => toggleQuickFilter(k as unknown as QuickFilterKey)}
+                      advanced={advFilters}
+                      onAddAdvanced={(field) => setAdvFilters([...advFilters, { id: crypto.randomUUID(), field, operator: "eq" }])}
+                      onUpdateAdvanced={(id, patch) => setAdvFilters(advFilters.map((f) => f.id === id ? { ...f, ...patch } : f))}
+                      onRemoveAdvanced={(id) => setAdvFilters(advFilters.filter((f) => f.id !== id))}
+                      onClear={() => { setQuickFilters(new Set()); setAdvFilters([]); }}
+                      users={users}
+                      onClose={() => setActiveMenu(null)}
+                    />
+                  </div>
+                )}
+                {activeMenu === "sort" && (
+                  <div className="absolute right-0 top-full z-30">
+                    <SortDropdown
+                      field={sortField}
+                      direction={sortDir}
+                      onChange={(f, d) => { setSortField(f); setSortDir(d); }}
+                      onClear={() => setSortField(null)}
+                      onClose={() => setActiveMenu(null)}
+                    />
+                  </div>
+                )}
+                {activeMenu === "group" && (
+                  <div className="absolute right-0 top-full z-30">
+                    <GroupDropdown
+                      groups={groups}
+                      customFields={[]}
+                      onAdd={(field) => setGroups([...groups, { id: crypto.randomUUID(), field, order: "custom" }])}
+                      onUpdate={(id, patch) => setGroups(groups.map((g) => g.id === id ? { ...g, ...patch } : g))}
+                      onRemove={(id) => setGroups(groups.filter((g) => g.id !== id))}
+                      onClear={() => setGroups([])}
+                      onClose={() => setActiveMenu(null)}
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -405,22 +459,69 @@ export default function ProjectListPage() {
                 const sectionTasks = tasksBySection[section.id] || [];
                 return (
                   <div key={section.id}>
-                    <div className="flex items-center gap-2 border-b border-gray-200 bg-gray-50 px-5 py-2">
+                    <div className="relative flex items-center gap-2 border-b border-gray-200 bg-gray-50 px-5 py-2">
                       <h3 className="text-sm font-semibold text-gray-700">{section.name}</h3>
                       <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600">
                         {sectionTasks.length}
                       </span>
                       <button
-                        onClick={() => {
-                          setCreateSectionId(section.id);
-                          setShowCreateModal(true);
-                        }}
-                        className="ml-auto rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+                        onClick={() => { setCreateSectionId(section.id); setShowCreateModal(true); }}
+                        className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
                       >
                         <Plus className="h-3.5 w-3.5" />
                       </button>
+                      <button
+                        onClick={() => setOpenSectionMenu(openSectionMenu === section.id ? null : section.id)}
+                        className="ml-auto rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+                        aria-label="Section actions"
+                      >
+                        <MoreHorizontal className="h-3.5 w-3.5" />
+                      </button>
+                      <div className="absolute right-2 top-full z-20">
+                        <SectionMenu
+                          open={openSectionMenu === section.id}
+                          onClose={() => setOpenSectionMenu(null)}
+                          onRename={() => {
+                            const name = window.prompt("Rename section", section.name);
+                            if (name && name.trim()) (useAppStore.getState() as any).updateSection(section.id, name.trim());
+                            setOpenSectionMenu(null);
+                          }}
+                          onAddSection={async (placement) => {
+                            const name = window.prompt(`Add section ${placement} ${section.name}`);
+                            if (name && name.trim()) {
+                              await (useAppStore.getState() as any).createSection({ name: name.trim(), projectId, position: section.position + (placement === "below" ? 1 : -1) });
+                            }
+                            setOpenSectionMenu(null);
+                          }}
+                          onDuplicate={async () => {
+                            await (useAppStore.getState() as any).createSection({ name: `${section.name} (copy)`, projectId, position: section.position + 1 });
+                            setOpenSectionMenu(null);
+                          }}
+                          onExpandSubtasks={() => setOpenSectionMenu(null)}
+                          onExpandGroups={() => setOpenSectionMenu(null)}
+                          onHideEmptyGroups={() => setOpenSectionMenu(null)}
+                          onDelete={() => {
+                            if (window.confirm(`Delete section "${section.name}"?`)) (useAppStore.getState() as any).deleteSection(section.id);
+                            setOpenSectionMenu(null);
+                          }}
+                        />
+                      </div>
                     </div>
-                    {sectionTasks.map(renderTaskRow)}
+                    {sectionTasks.map((task) => (
+                      <div
+                        key={task.id}
+                        onContextMenu={(e) => { e.preventDefault(); setContextMenu({ taskId: task.id, x: e.clientX, y: e.clientY }); }}
+                      >
+                        {renderTaskRow(task)}
+                      </div>
+                    ))}
+                    <div className="border-b border-gray-100 px-5 py-1.5">
+                      <InlineAddTaskRow
+                        onCreate={async (title) => {
+                          await createTask({ title, projectId, sectionId: section.id });
+                        }}
+                      />
+                    </div>
                   </div>
                 );
               })}
@@ -454,6 +555,45 @@ export default function ProjectListPage() {
           </div>
         )}
       </div>
+
+      {bulkSelected.size > 0 && (
+        <BulkActionBar
+          count={bulkSelected.size}
+          users={users}
+          onClear={() => setBulkSelected(new Set())}
+          onAssign={async (uid) => { for (const id of Array.from(bulkSelected)) await updateTask(id, { assigneeId: uid }); }}
+          onSetDueDate={async (d) => { for (const id of Array.from(bulkSelected)) await updateTask(id, { dueDate: d }); }}
+          onAddToProject={() => {}}
+          onSetCustomField={() => {}}
+          onAddTags={() => {}}
+          onMarkComplete={async () => { for (const id of Array.from(bulkSelected)) await toggleTaskComplete(id); setBulkSelected(new Set()); }}
+          onDelete={async () => { for (const id of Array.from(bulkSelected)) await deleteTask(id); setBulkSelected(new Set()); }}
+        />
+      )}
+      {contextMenu && (
+        <TaskContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          onDuplicate={() => { handleDuplicateTask(contextMenu.taskId); setContextMenu(null); }}
+          onCreateFollowUp={async () => {
+            const t = tasks.find((x) => x.id === contextMenu.taskId);
+            if (t) await createTask({ title: `Follow up: ${t.title}`, projectId: t.projectId ?? undefined });
+            setContextMenu(null);
+          }}
+          onMarkComplete={() => { handleToggleComplete(contextMenu.taskId); setContextMenu(null); }}
+          onAddSubtask={async () => {
+            const title = window.prompt("Subtask title");
+            if (title) await createTask({ title, parentId: contextMenu.taskId, projectId });
+            setContextMenu(null);
+          }}
+          onConvertTo={(type) => { updateTask(contextMenu.taskId, { taskType: type } as any); setContextMenu(null); }}
+          onOpenDetails={() => { setSelectedTaskId(contextMenu.taskId); setContextMenu(null); }}
+          onOpenInNewTab={() => { window.open(`/project/list?id=${projectId}&task=${contextMenu.taskId}`, "_blank"); setContextMenu(null); }}
+          onCopyLink={() => { navigator.clipboard.writeText(`${window.location.origin}/project/list?id=${projectId}&task=${contextMenu.taskId}`); setContextMenu(null); }}
+          onDelete={() => { handleDeleteTask(contextMenu.taskId); setContextMenu(null); }}
+        />
+      )}
 
       {/* Create task modal */}
       <CreateTaskModal
