@@ -872,13 +872,21 @@ export const useAppStore = create<AppState>()(
         error: null,
       });
 
-      // Fire-and-forget: load comments / likes / followers
-      get().fetchCommentsAndLikes().catch((err) => {
-        console.warn("fetchCommentsAndLikes failed", err);
-      });
-      get().fetchActivity().catch((err) => {
-        console.warn("fetchActivity failed", err);
-      });
+      // Defer secondary fetches so they don't compound the initial render
+      // burst. Each one updates state and triggers re-renders; running them
+      // after the first paint keeps the dashboard load smooth.
+      if (typeof window !== "undefined") {
+        setTimeout(() => {
+          get().fetchCommentsAndLikes().catch((err) => {
+            console.warn("fetchCommentsAndLikes failed", err);
+          });
+        }, 100);
+        setTimeout(() => {
+          get().fetchActivity().catch((err) => {
+            console.warn("fetchActivity failed", err);
+          });
+        }, 200);
+      }
     } catch (err) {
       console.error("Supabase fetch failed:", err);
       // No mock fallback - show empty state with error

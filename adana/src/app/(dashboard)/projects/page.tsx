@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/store/app-store";
@@ -93,8 +93,10 @@ export default function ProjectsPage() {
     { key: "complete", label: "Complete" },
   ];
 
+  const creatingRef = useRef(false);
   async function handleCreateProject() {
-    if (!newProjectName.trim() || isCreating) return;
+    if (!newProjectName.trim() || creatingRef.current) return;
+    creatingRef.current = true;
     setIsCreating(true);
     try {
       const project = await createProject({
@@ -109,6 +111,7 @@ export default function ProjectsPage() {
       router.push(`/project/list?id=${project.id}`);
     } finally {
       setIsCreating(false);
+      creatingRef.current = false;
     }
   }
 
