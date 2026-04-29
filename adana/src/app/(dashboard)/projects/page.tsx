@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/store/app-store";
@@ -33,11 +33,24 @@ type StatusFilter = "all" | ProjectStatusType;
 
 export default function ProjectsPage() {
   const router = useRouter();
-  const store = useAppStore();
-  const { tasks, createProject } = store;
-  // Use per-user filtered selector when available; fall back to full list.
-  const getVisibleProjects = (store as any).getVisibleProjects as undefined | (() => Project[]);
-  const projects = getVisibleProjects ? getVisibleProjects() : store.projects;
+  const tasks = useAppStore((s) => s.tasks);
+  const createProject = useAppStore((s) => s.createProject);
+  const allProjects = useAppStore((s) => s.projects);
+  const currentUserId = useAppStore((s) => s.currentUser.id);
+  const projectMembers = useAppStore((s) => s.projectMembers);
+
+  const projects = useMemo(() => {
+    const alive = allProjects.filter((p) => !(p as any).deletedAt);
+    if (!currentUserId) return alive;
+    const memberIds = new Set(
+      projectMembers
+        .filter((m) => m.userId === currentUserId)
+        .map((m) => m.projectId)
+    );
+    return alive.filter(
+      (p) => (p as any).creatorId === currentUserId || memberIds.has(p.id)
+    );
+  }, [allProjects, currentUserId, projectMembers]);
   const [sortBy, setSortBy] = useState<SortKey>("recent");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");

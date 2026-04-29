@@ -159,18 +159,25 @@ export default function ProjectListPage() {
   const searchParams = useSearchParams();
   const projectId = searchParams?.get("id") as string;
 
-  const {
-    getProjectTasks,
-    getProjectSections,
-    toggleTaskComplete,
-    updateTask,
-    deleteTask,
-    createTask,
-    users,
-  } = useAppStore();
+  const allTasks = useAppStore((s) => s.tasks);
+  const allSections = useAppStore((s) => s.sections);
+  const toggleTaskComplete = useAppStore((s) => s.toggleTaskComplete);
+  const updateTask = useAppStore((s) => s.updateTask);
+  const deleteTask = useAppStore((s) => s.deleteTask);
+  const createTask = useAppStore((s) => s.createTask);
+  const users = useAppStore((s) => s.users);
 
-  const rawTasks = getProjectTasks(projectId);
-  const sections = getProjectSections(projectId);
+  const rawTasks = useMemo(
+    () =>
+      allTasks.filter(
+        (t) => t.projectId === projectId && !t.parentId && !(t as any).deletedAt
+      ),
+    [allTasks, projectId]
+  );
+  const sections = useMemo(
+    () => allSections.filter((s) => s.projectId === projectId),
+    [allSections, projectId]
+  );
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
