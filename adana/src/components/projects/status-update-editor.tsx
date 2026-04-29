@@ -95,16 +95,23 @@ export function StatusUpdateEditor({
   readonlyUpdate = null,
 }: StatusUpdateEditorProps) {
   const users = useAppStore((s) => s.users);
-  const projectMembers = useAppStore((s) =>
-    s.projectMembers.filter((m) => m.projectId === project.id)
-  );
-  const allTasks = useAppStore((s) =>
-    s.tasks.filter((t) => t.projectId === project.id)
-  );
-  const projectStatusUpdates = useAppStore((s) =>
-    s.projectStatusUpdates.filter((u) => u.projectId === project.id)
-  );
+  const allProjectMembers = useAppStore((s) => s.projectMembers);
+  const allTasksRaw = useAppStore((s) => s.tasks);
+  const allStatusUpdates = useAppStore((s) => s.projectStatusUpdates);
   const postProjectStatus = useAppStore((s) => s.postProjectStatus);
+
+  const projectMembers = React.useMemo(
+    () => allProjectMembers.filter((m) => m.projectId === project.id),
+    [allProjectMembers, project.id]
+  );
+  const allTasks = React.useMemo(
+    () => allTasksRaw.filter((t) => t.projectId === project.id),
+    [allTasksRaw, project.id]
+  );
+  const projectStatusUpdates = React.useMemo(
+    () => allStatusUpdates.filter((u) => u.projectId === project.id),
+    [allStatusUpdates, project.id]
+  );
 
   const readOnly = !!readonlyUpdate;
   const initial = readonlyUpdate

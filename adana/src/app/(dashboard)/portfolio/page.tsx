@@ -199,7 +199,7 @@ function ListTab({ projects, tasks }: { projects: Project[]; tasks: Task[] }) {
               return (
                 <Link
                   key={p.id}
-                  href={`/projects/${p.id}/overview`}
+                  href={`/project/overview?id=${p.id}`}
                   className="flex items-center gap-4 px-6 py-3 hover:bg-gray-50"
                 >
                   <div className="h-2.5 w-2.5 rounded" style={{ backgroundColor: p.color }} />

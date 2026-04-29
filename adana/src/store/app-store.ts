@@ -777,8 +777,13 @@ export const useAppStore = create<AppState>()(
 
       // Fetch extended tables in parallel. Each is wrapped so that a missing
       // table (migration not yet applied) does not break the app.
-      const safe = async <T,>(fn: () => Promise<T[]>): Promise<T[]> => {
-        try { return await fn(); } catch { return []; }
+      const safe = async <T,>(fn: () => Promise<T[]>, label?: string): Promise<T[]> => {
+        try { return await fn(); } catch (err) {
+          if (label && typeof window !== "undefined") {
+            console.warn(`[adana] table "${label}" missing — features depending on it will be no-ops until the migration is applied.`);
+          }
+          return [];
+        }
       };
       const [
         tagsD, taskTagsD, depsD, taskProjectsD,

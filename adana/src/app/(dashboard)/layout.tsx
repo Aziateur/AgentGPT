@@ -14,8 +14,12 @@ export default function DashboardRootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const store = useAppStore();
-  const { initialized, loading, currentUser, projects, notifications, init } = store;
+  const initialized = useAppStore((s) => s.initialized);
+  const loading = useAppStore((s) => s.loading);
+  const currentUser = useAppStore((s) => s.currentUser);
+  const projects = useAppStore((s) => s.projects);
+  const notifications = useAppStore((s) => s.notifications);
+  const init = useAppStore((s) => s.init);
 
   useShortcuts();
 

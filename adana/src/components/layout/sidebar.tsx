@@ -227,7 +227,7 @@ export function Sidebar({
           name: p.name,
           color: p.color,
           icon: p.icon,
-          href: `/projects/${p.id}/list`,
+          href: `/project/list?id=${p.id}`,
           active: activeProjectId === p.id,
         })),
     [allProjects, activeProjectId]
@@ -260,8 +260,8 @@ export function Sidebar({
         icon: p.icon,
         kind: "project",
         subItems: subs,
-        href: `/projects/${p.id}/list`,
-        detailsHref: `/projects/${p.id}/overview`,
+        href: `/project/list?id=${p.id}`,
+        detailsHref: `/project/overview?id=${p.id}`,
         active: activeProjectId === p.id,
       });
     }

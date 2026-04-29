@@ -56,20 +56,24 @@ export function useTaskDetailPanel() {
   }, [taskParam]);
 
   function openTask(id: string) {
+    if (useTaskDetailStore.getState().selectedTaskId === id) return;
     setSelectedTaskId(id);
     // Reflect into the URL so deep links work. Use replace to avoid
     // polluting browser history with every task click.
     if (pathname) {
       const params = new URLSearchParams(searchParams?.toString() ?? "");
+      if (params.get("task") === id) return;
       params.set("task", id);
       router.replace(`${pathname}?${params.toString()}`);
     }
   }
 
   function closeTask() {
+    if (useTaskDetailStore.getState().selectedTaskId === null) return;
     setSelectedTaskId(null);
     if (pathname) {
       const params = new URLSearchParams(searchParams?.toString() ?? "");
+      if (!params.has("task")) return;
       params.delete("task");
       const qs = params.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname);

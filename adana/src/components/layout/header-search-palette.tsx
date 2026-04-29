@@ -223,7 +223,7 @@ export function SearchPalette({ open, onClose, onOpenAdvanced }: Props) {
             id: p.id,
             title: p.name,
             subtitle: p.description || undefined,
-            href: `/projects/${p.id}/list`,
+            href: `/project/list?id=${p.id}`,
           });
         }
       });
@@ -298,7 +298,7 @@ export function SearchPalette({ open, onClose, onOpenAdvanced }: Props) {
   function openRecent(r: RecentItem) {
     const href =
       r.type === "project"
-        ? `/projects/${r.id}/list`
+        ? `/project/list?id=${r.id}`
         : r.type === "task"
           ? `/search?q=${encodeURIComponent(r.title)}&type=task`
           : r.type === "portfolio"
