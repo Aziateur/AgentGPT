@@ -17,24 +17,13 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({
   children,
-  user,
+  user: _user,
   projects = [],
   teams = [],
   notificationCount = 0,
 }: DashboardLayoutProps) {
-  const { sidebarCollapsed, theme, setCurrentUser } = useAppStore();
-
-  // Set the current user in the Zustand store when the server provides one
-  useEffect(() => {
-    if (user) {
-      setCurrentUser({
-        id: user.id as string,
-        name: user.name as string,
-        email: user.email as string,
-        avatar: (user.avatar as string | null) ?? null,
-      });
-    }
-  }, [user, setCurrentUser]);
+  const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed);
+  const theme = useAppStore((s) => s.theme);
 
   // Sync the dark class on <html> so Tailwind dark: variants work globally
   useEffect(() => {

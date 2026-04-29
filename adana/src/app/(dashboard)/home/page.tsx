@@ -100,11 +100,26 @@ function saveOrder(widgets: HomeWidget[]) {
 }
 
 export default function HomePage() {
-  const store = useAppStore();
-  const { initialized, loading, currentUser, tasks, goalsExt } = store;
-  const getVisibleProjects = (store as any).getVisibleProjects as undefined | (() => Project[]);
-  const projects = getVisibleProjects ? getVisibleProjects() : store.projects;
-  const projectMembers = (store as any).projectMembers as { projectId: string; userId: string }[] | undefined;
+  const initialized = useAppStore((s) => s.initialized);
+  const loading = useAppStore((s) => s.loading);
+  const currentUser = useAppStore((s) => s.currentUser);
+  const tasks = useAppStore((s) => s.tasks);
+  const goalsExt = useAppStore((s) => s.goalsExt);
+  const allProjects = useAppStore((s) => s.projects);
+  const projectMembers = useAppStore((s) => s.projectMembers);
+
+  const projects = useMemo(() => {
+    const alive = allProjects.filter((p) => !(p as any).deletedAt);
+    if (!currentUser?.id) return alive;
+    const ids = new Set(
+      projectMembers
+        .filter((m) => m.userId === currentUser.id)
+        .map((m) => m.projectId)
+    );
+    return alive.filter(
+      (p) => (p as any).creatorId === currentUser.id || ids.has(p.id)
+    );
+  }, [allProjects, currentUser?.id, projectMembers]);
 
   const [widgets, setWidgets] = useState<HomeWidget[]>(DEFAULT_WIDGETS);
   const [customizing, setCustomizing] = useState(false);
